@@ -478,30 +478,31 @@ def render_entries(feed_service: FeedService, db_session: Session):
             
             st.markdown(f"[Read More]({entry.link})")
             
-            # Security Analysis for security feeds
-            if entry.feed.is_security_feed:
-                if entry.security_analysis:
-                    st.markdown("#### 🛡️ Security Analysis")
-                    iocs = eval(entry.security_analysis.iocs)
-                    
-                    # Create two columns for IOCs and Sigma rule
-                    sec_col1, sec_col2 = st.columns(2)
-                    
-                    with sec_col1:
-                        if iocs:
-                            st.markdown("**IOCs Found:**")
-                            df = pd.DataFrame(iocs)
-                            st.dataframe(df, use_container_width=True)
-                    
-                    with sec_col2:
-                        if entry.security_analysis.sigma_rule and entry.security_analysis.sigma_rule != "No applicable Sigma rule for this content.":
-                            st.markdown("**Sigma Rule:**")
-                            st.code(entry.security_analysis.sigma_rule, language="yaml")
-                else:
-                    if st.button("🛡️ Analyze Security", key=f"sec_{entry.id}"):
-                        with st.spinner("Analyzing..."):
-                            feed_service.analyze_security(entry.id)
-                        st.rerun()
+            # Security Analysis section
+            if entry.security_analysis:
+                st.markdown("#### 🛡️ Security Analysis")
+                iocs = eval(entry.security_analysis.iocs)
+                
+                # Create two columns for IOCs and Sigma rule
+                sec_col1, sec_col2 = st.columns(2)
+                
+                with sec_col1:
+                    if iocs:
+                        st.markdown("**IOCs Found:**")
+                        df = pd.DataFrame(iocs)
+                        st.dataframe(df, use_container_width=True)
+                
+                with sec_col2:
+                    if entry.security_analysis.sigma_rule and entry.security_analysis.sigma_rule != "No applicable Sigma rule for this content.":
+                        st.markdown("**Sigma Rule:**")
+                        st.code(entry.security_analysis.sigma_rule, language="yaml")
+            
+            # Security Analysis Button
+            if not entry.security_analysis:
+                if st.button("🛡️ Analyze Security", key=f"sec_{entry.id}"):
+                    with st.spinner("Analyzing..."):
+                        feed_service.analyze_security(entry.id)
+                    st.rerun()
 
             # Detailed Content Analysis Button
             if st.button("🔍 Analyze Content", key=f"analyze_{entry.id}"):
