@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
+import xml.etree.ElementTree as ET
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -15,11 +16,30 @@ engine = create_engine(f'sqlite:///{database_path}')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
-# Initialize session state for Ollama configuration
+import json
+import os
+
+# Load or create config file
+CONFIG_FILE = os.path.join(os.path.dirname(database_path), 'config.json')
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            pass
+    return {"ollama_url": "http://localhost:11434", "ollama_model": "mistral"}
+
+def save_config(config):
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f)
+
+# Initialize configuration
+config = load_config()
 if 'ollama_url' not in st.session_state:
-    st.session_state.ollama_url = "http://localhost:11434"
+    st.session_state.ollama_url = config["ollama_url"]
 if 'ollama_model' not in st.session_state:
-    st.session_state.ollama_model = "mistral"
+    st.session_state.ollama_model = config["ollama_model"]
 
 # Services setup
 llm_service = LLMService(st.session_state.ollama_url, st.session_state.ollama_model)
@@ -37,9 +57,24 @@ def main():
     with st.sidebar:
         st.header("Configuration")
         st.session_state.ollama_url = st.text_input("Ollama URL", st.session_state.ollama_url)
-        st.session_state.ollama_model = st.text_input("Ollama Model", st.session_state.ollama_model)
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            # Get available models from Ollama
+            available_models = llm_service.get_available_models()
+            selected_model = st.selectbox("Ollama Model", options=available_models, 
+                                        index=available_models.index(st.session_state.ollama_model) if st.session_state.ollama_model in available_models else 0)
+        with col2:
+            if st.button("🔄", help="Refresh model list"):
+                st.rerun()
+        
+        if selected_model != st.session_state.ollama_model:
+            st.session_state.ollama_model = selected_model
+            llm_service.update_config(st.session_state.ollama_url, selected_model)
+            save_config({"ollama_url": st.session_state.ollama_url, "ollama_model": selected_model})
         
         st.header("Add New Feed")
+        st.write("Add individual feed:")
         new_feed_url = st.text_input("Feed URL")
         is_security_feed = st.checkbox("Security Feed")
         if st.button("Add Feed"):
@@ -48,6 +83,27 @@ def main():
                 st.success("Feed added successfully!")
             else:
                 st.error("Please enter a feed URL")
+        
+        st.write("Or import feeds from OPML:")
+        uploaded_file = st.file_uploader("Choose an OPML file", type="opml")
+        if uploaded_file is not None:
+            try:
+                tree = ET.parse(uploaded_file)
+                root = tree.getroot()
+                imported_count = 0
+                for outline in root.findall(".//outline"):
+                    feed_url = outline.get('xmlUrl')
+                    if feed_url:
+                        # Check if feed is security related based on categories/tags
+                        is_security = any(security_term in (outline.get('category', '') + outline.get('text', '')).lower() 
+                                        for security_term in ['security', 'vulnerability', 'threat', 'cve'])
+                        feed_service.add_feed(feed_url, is_security)
+                        imported_count += 1
+                st.success(f"Successfully imported {imported_count} feeds from OPML file!")
+            except ET.ParseError:
+                st.error("Invalid OPML file")
+            except Exception as e:
+                st.error(f"Error importing OPML: {str(e)}")
     
     # Main content area
     tab1, tab2 = st.tabs(["Feed Entries", "Security Analysis"])

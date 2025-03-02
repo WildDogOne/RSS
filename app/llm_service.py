@@ -6,6 +6,16 @@ class LLMService:
         self.base_url = base_url
         self.model = model
 
+    def get_available_models(self) -> list[str]:
+        """Get list of available models from Ollama."""
+        try:
+            response = requests.get(f"{self.base_url}/api/tags")
+            response.raise_for_status()
+            return [model['name'] for model in response.json()['models']]
+        except (requests.RequestException, KeyError) as e:
+            print(f"Error getting models: {str(e)}")
+            return ["mistral"]  # Return default model as fallback
+
     def _generate(self, prompt: str) -> str:
         try:
             response = requests.post(

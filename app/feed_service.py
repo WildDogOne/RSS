@@ -11,6 +11,13 @@ class FeedService:
         self.llm_service = llm_service
 
     def add_feed(self, url: str, is_security_feed: bool = False) -> Feed:
+        existing_feed = self.db.query(Feed).filter(Feed.url == url).first()
+        if existing_feed:
+            if existing_feed.is_security_feed != is_security_feed:
+                existing_feed.is_security_feed = is_security_feed
+                self.db.commit()
+            return existing_feed
+        
         feed = Feed(url=url, is_security_feed=is_security_feed)
         self.db.add(feed)
         self.db.commit()
