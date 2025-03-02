@@ -4,9 +4,9 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from apscheduler.schedulers.background import BackgroundScheduler
-from .models import Base, Feed, FeedEntry, SecurityAnalysis
-from .feed_service import FeedService
-from .llm_service import LLMService
+from app.models import Base, Feed, FeedEntry, SecurityAnalysis
+from app.feed_service import FeedService
+from app.llm_service import LLMService
 
 # Database setup
 database_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'rss.db')
@@ -17,7 +17,7 @@ Session = sessionmaker(bind=engine)
 
 # Initialize session state for Ollama configuration
 if 'ollama_url' not in st.session_state:
-    st.session_state.ollama_url = "http://ollama:11434"
+    st.session_state.ollama_url = "http://localhost:11434"
 if 'ollama_model' not in st.session_state:
     st.session_state.ollama_model = "mistral"
 

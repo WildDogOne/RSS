@@ -11,13 +11,13 @@ A Streamlit web application that combines RSS feed reading with local LLM-powere
   - Automatic IOC extraction
   - Sigma rule generation
 - Streamlit-based user interface
-- Configurable Ollama settings (URL and model)
+- Configurable Ollama connection
 - Docker-based deployment
 
 ## Prerequisites
 
 - Docker and Docker Compose
-- Ollama installed and running with your preferred model (not included in container)
+- Ollama installed and running on your system or network with your preferred model
 
 ## Setup and Running
 
@@ -27,23 +27,30 @@ git clone https://github.com/yourusername/RSS.git
 cd RSS
 ```
 
-2. Build and start the containers:
+2. Build and start the container:
 ```bash
 docker-compose up --build
 ```
 
-3. Access the web interface:
+3. Configure Ollama connection:
    - Open http://localhost:8501 in your browser
-   - Configure Ollama settings in the sidebar (defaults to http://ollama:11434 and mistral model)
+   - In the sidebar, set your Ollama URL:
+     - Use `http://localhost:11434` if Ollama is running on the same machine
+     - Use `http://<ollama-host>:11434` if Ollama is running on a different machine
+   - Set your preferred model name (must be already installed in your Ollama instance)
+
+4. Start using the application:
    - Add RSS feeds through the sidebar interface
    - Mark security-related feeds for additional analysis
 
 ## Usage
 
-1. Configure Ollama:
-   - In the sidebar, set your Ollama URL (default: http://ollama:11434)
-   - Select your preferred model (default: mistral)
-   - Make sure the model is available in your Ollama installation
+1. Configure Ollama Connection:
+   - Set Ollama URL in the sidebar:
+     - Local Ollama: `http://localhost:11434`
+     - Remote Ollama: `http://<ollama-host>:11434`
+   - Enter the name of an installed model
+   - The connection status will be shown when adding feeds or viewing content
 
 2. Add feeds through the sidebar:
    - Enter the RSS feed URL
@@ -67,9 +74,8 @@ docker-compose up --build
 
 ## Docker Volume Persistence
 
-The application uses two Docker volumes:
+The application uses a Docker volume:
 - `./data:/app/data` - Stores the SQLite database
-- `ollama_data:/root/.ollama` - Persists Ollama models and data
 
 ## Development
 
@@ -87,6 +93,14 @@ The application uses Ollama for:
 - Sigma rule generation (for security feeds)
 
 Make sure:
-- Your Ollama installation is properly configured
-- The selected model is installed in Ollama
+- Your Ollama installation is properly configured and accessible
+- The selected model is installed in your Ollama instance
 - Your system has adequate resources to run the LLM efficiently
+
+## Troubleshooting
+
+If you cannot connect to Ollama:
+1. Verify Ollama is running (`ollama ps`)
+2. Check the Ollama URL in the sidebar configuration
+3. Ensure network connectivity between the container and Ollama host
+4. Verify the model specified is installed (`ollama list`)

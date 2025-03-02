@@ -2,8 +2,8 @@ import feedparser
 from datetime import datetime
 from typing import List, Dict
 from sqlalchemy.orm import Session
-from .models import Feed, FeedEntry, SecurityAnalysis
-from .llm_service import LLMService
+from app.models import Feed, FeedEntry, SecurityAnalysis
+from app.llm_service import LLMService
 
 class FeedService:
     def __init__(self, db_session: Session, llm_service: LLMService):

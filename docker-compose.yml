@@ -9,23 +9,6 @@ services:
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
-    networks:
-      - rss_network
-    depends_on:
-      - ollama
-
-  ollama:
-    image: ollama/ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - rss_network
-
-networks:
-  rss_network:
-    driver: bridge
 
 volumes:
-  ollama_data:
+  data:
