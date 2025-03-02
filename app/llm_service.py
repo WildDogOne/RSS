@@ -2,19 +2,30 @@ import json
 import requests
 
 class LLMService:
-    def __init__(self, base_url="http://ollama:11434"):
+    def __init__(self, base_url="http://ollama:11434", model="mistral"):
         self.base_url = base_url
+        self.model = model
 
-    def _generate(self, model: str, prompt: str) -> str:
-        response = requests.post(
-            f"{self.base_url}/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False
-            }
-        )
-        return response.json()["response"]
+    def _generate(self, prompt: str) -> str:
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            return response.json()["response"]
+        except (requests.RequestException, KeyError) as e:
+            return f"Error generating response: {str(e)}"
+
+    def update_config(self, base_url: str, model: str) -> None:
+        """Update the LLM service configuration."""
+        self.base_url = base_url
+        self.model = model
 
     def summarize_article(self, content: str) -> str:
         prompt = f"""Summarize the following article concisely in 2-3 sentences:
@@ -22,7 +33,7 @@ class LLMService:
 {content}
 
 Summary:"""
-        return self._generate("mistral", prompt)
+        return self._generate(prompt)
 
     def analyze_security_content(self, content: str) -> tuple[list, str]:
         # Extract IOCs
@@ -34,7 +45,7 @@ If no IOCs are found, return an empty array.
 
 IOCs:"""
         
-        iocs_result = self._generate("mistral", ioc_prompt)
+        iocs_result = self._generate(ioc_prompt)
         try:
             iocs = json.loads(iocs_result)
         except json.JSONDecodeError:
@@ -42,12 +53,13 @@ IOCs:"""
 
         # Generate Sigma rule
         sigma_prompt = f"""Based on the following security article, create a Sigma rule that could detect the described threat.
+Include title, description, status, level, and detection sections in YAML format.
 If no meaningful detection rule can be created, return "No applicable Sigma rule for this content."
 
 {content}
 
 Sigma rule:"""
         
-        sigma_rule = self._generate("mistral", sigma_prompt)
+        sigma_rule = self._generate(sigma_prompt)
         
         return iocs, sigma_rule
