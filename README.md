@@ -1,25 +1,59 @@
 # RSS Feed Reader with LLM Analysis
 
-A Streamlit web application that combines RSS feed reading with local LLM-powered analysis using Ollama. It automatically summarizes feed entries and performs security analysis on security-related feeds.
+A modern web application that combines RSS feed reading with advanced LLM-powered analysis using Ollama. It automatically processes and analyzes feed entries, providing summaries, detailed content analysis, and specialized security analysis features.
 
-## Features
+## Core Features
 
-- RSS feed aggregation and management
+### Feed Management
+- RSS/Atom feed aggregation and management
+- Category-based feed organization
+- OPML import support for bulk feed addition
 - Automatic feed updates every 30 minutes
-- LLM-powered article summarization using Ollama
+- Read/unread entry tracking
+- Feed categorization and organization
+
+### LLM-Powered Analysis
+- Automatic article summarization
+- Detailed content analysis including:
+  - Key points and findings
+  - Technical details extraction
+  - Impact assessment
+  - Related technologies/concepts
+  - Recommendations and conclusions
 - Security feed analysis:
-  - Automatic IOC extraction
-  - Sigma rule generation
-- Streamlit-based user interface
-- Configurable Ollama connection
-- Docker-based deployment
+  - Automated IOC (Indicators of Compromise) extraction
+  - Sigma rule generation for threat detection
+  - Structured security insights
 
-## Prerequisites
+### User Interface
+- Clean, modern Streamlit-based interface
+- Category-based feed organization
+- Configurable view settings:
+  - Show/hide read entries
+  - Adjustable entries per feed
+  - Last update timestamp display
+- Expandable entry cards with:
+  - Original content link
+  - Publication date
+  - Category information
+  - LLM-generated summaries
+  - Security analysis (for security feeds)
 
+### Advanced Features
+- Debug console with real-time logging
+- Configurable logging levels
+- Test feed functionality for debugging
+- Detailed entry analysis on demand
+- Filter and search capabilities
+- Customizable LLM model selection
+
+## Technical Setup
+
+### Prerequisites
 - Docker and Docker Compose
-- Ollama installed and running on your system or network with your preferred model
+- Ollama installed and running with your preferred model
 
-## Setup and Running
+### Installation
 
 1. Clone the repository:
 ```bash
@@ -27,80 +61,103 @@ git clone https://github.com/yourusername/RSS.git
 cd RSS
 ```
 
-2. Build and start the container:
+2. Build and start the containers:
 ```bash
 docker-compose up --build
 ```
 
 3. Configure Ollama connection:
-   - Open http://localhost:8501 in your browser
-   - In the sidebar, set your Ollama URL:
-     - Use `http://localhost:11434` if Ollama is running on the same machine
-     - Use `http://<ollama-host>:11434` if Ollama is running on a different machine
-   - Set your preferred model name (must be already installed in your Ollama instance)
+   - Access http://localhost:8501
+   - In Settings (⚙️):
+     - Set Ollama URL (`http://localhost:11434` for local, or `http://<ollama-host>:11434` for remote)
+     - Select your preferred model from available models
+     - Configure logging and debug settings if needed
 
-4. Start using the application:
-   - Add RSS feeds through the sidebar interface
-   - Mark security-related feeds for additional analysis
+### Data Persistence
+The application uses Docker volumes for data persistence:
+- `./data:/app/data` - Stores the SQLite database and configuration
 
-## Usage
+## Usage Guide
 
-1. Configure Ollama Connection:
-   - Set Ollama URL in the sidebar:
-     - Local Ollama: `http://localhost:11434`
-     - Remote Ollama: `http://<ollama-host>:11434`
-   - Enter the name of an installed model
-   - The connection status will be shown when adding feeds or viewing content
+### Main Interface Components
 
-2. Add feeds through the sidebar:
-   - Enter the RSS feed URL
-   - Check "Security Feed" for security-related feeds
-   - Click "Add Feed" to submit
+1. **Header Controls**
+   - ⚙️ Settings - Configure application settings
+   - 🔄 Update All - Manual feed refresh
+   - 🖥️ Console - Toggle debug console
 
-3. View feed entries:
-   - Select a feed from the dropdown in the "Feed Entries" tab
-   - Each entry shows:
-     - Title and publication date
-     - Original link
-     - LLM-generated summary
-     - Original content
+2. **Feed Management**
+   - Add new feeds with optional titles and categories
+   - Import feeds from OPML files
+   - Organize feeds into categories
+   - Mark entries as read/unread
 
-4. Security Analysis:
-   - Switch to the "Security Analysis" tab
-   - Select a security feed from the dropdown
-   - View for each entry:
-     - Extracted IOCs in table format
-     - Generated Sigma rules
+3. **Entry Analysis**
+   - 🤖 Generate Summary - Create LLM summary
+   - 🔍 Analyze Content - Perform detailed content analysis
+   - 🛡️ Security Analysis - For security-related feeds
 
-## Docker Volume Persistence
+4. **View Controls**
+   - Show/hide read entries
+   - Select number of entries per feed
+   - Filter by category or individual feed
 
-The application uses a Docker volume:
-- `./data:/app/data` - Stores the SQLite database
+### Advanced Configuration
+
+1. **Debug Settings**
+   - Enable/disable debug mode
+   - Set logging level (DEBUG, INFO, WARNING, ERROR)
+   - Access real-time logs in debug console
+
+2. **LLM Configuration**
+   - Configure Ollama connection URL
+   - Select from available models
+   - Test connection and refresh model list
+
+## Security Feed Features
+
+Security-focused feeds receive additional analysis:
+
+1. **IOC Extraction**
+   - Identifies and categorizes potential indicators
+   - Supports multiple IOC types (IPs, domains, hashes, URLs)
+   - Presents findings in structured format
+
+2. **Sigma Rule Generation**
+   - Creates detection rules based on article content
+   - Includes title, description, status, and level
+   - Provides YAML-formatted rules for security tools
+
+## Troubleshooting
+
+1. **Ollama Connection Issues**
+   - Verify Ollama is running (`ollama ps`)
+   - Check URL configuration in settings
+   - Ensure network connectivity
+   - Verify model availability (`ollama list`)
+
+2. **Feed Issues**
+   - Check feed URL validity
+   - Verify feed format (RSS/Atom)
+   - Review debug console for detailed errors
+   - Check feed update timestamp
+
+3. **Performance Optimization**
+   - Adjust entries per feed limit
+   - Use categories for better organization
+   - Mark read entries to reduce clutter
+   - Configure appropriate logging level
 
 ## Development
 
-To run in development mode:
+For development mode:
 ```bash
 # Start with hot reloading
 docker-compose up
 ```
 
-## Note on LLM Usage
-
-The application uses Ollama for:
-- Article summarization
-- IOC extraction (for security feeds)
-- Sigma rule generation (for security feeds)
-
-Make sure:
-- Your Ollama installation is properly configured and accessible
-- The selected model is installed in your Ollama instance
-- Your system has adequate resources to run the LLM efficiently
-
-## Troubleshooting
-
-If you cannot connect to Ollama:
-1. Verify Ollama is running (`ollama ps`)
-2. Check the Ollama URL in the sidebar configuration
-3. Ensure network connectivity between the container and Ollama host
-4. Verify the model specified is installed (`ollama list`)
+Debug features:
+- Real-time logging in debug console
+- Test feed functionality
+- Configurable log levels
+- SQL query logging in debug mode
