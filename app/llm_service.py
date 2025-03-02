@@ -1,6 +1,7 @@
 import json
 import requests
 
+
 class LLMService:
     def __init__(self, base_url="http://ollama:11434", model="mistral"):
         self.base_url = base_url
@@ -11,7 +12,7 @@ class LLMService:
         try:
             response = requests.get(f"{self.base_url}/api/tags")
             response.raise_for_status()
-            return [model['name'] for model in response.json()['models']]
+            return [model["name"] for model in response.json()["models"]]
         except (requests.RequestException, KeyError) as e:
             print(f"Error getting models: {str(e)}")
             return ["mistral"]  # Return default model as fallback
@@ -20,12 +21,8 @@ class LLMService:
         try:
             response = requests.post(
                 f"{self.base_url}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=30
+                json={"model": self.model, "prompt": prompt, "stream": False},
+                timeout=30,
             )
             response.raise_for_status()
             return response.json()["response"]
@@ -54,7 +51,7 @@ If no IOCs are found, return an empty array.
 {content}
 
 IOCs:"""
-        
+
         iocs_result = self._generate(ioc_prompt)
         try:
             iocs = json.loads(iocs_result)
@@ -69,7 +66,7 @@ If no meaningful detection rule can be created, return "No applicable Sigma rule
 {content}
 
 Sigma rule:"""
-        
+
         sigma_rule = self._generate(sigma_prompt)
-        
+
         return iocs, sigma_rule
