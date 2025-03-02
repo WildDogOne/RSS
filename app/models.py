@@ -69,3 +69,15 @@ class DetailedAnalysis(Base):
     recommendations = Column(Text)
     analysis_date = Column(DateTime, default=datetime.utcnow)
     entry = relationship("FeedEntry", back_populates="detailed_analysis")
+
+class IOC(Base):
+    __tablename__ = "iocs"
+
+    id = Column(Integer, primary_key=True)
+    type = Column(String(50), nullable=False)  # e.g., IP, URL, hash, domain
+    value = Column(String(500), nullable=False)
+    context = Column(Text)  # Surrounding text where IOC was found
+    entry_id = Column(Integer, ForeignKey("feed_entries.id"))
+    discovered_date = Column(DateTime, default=datetime.utcnow)
+    confidence_score = Column(Integer)  # 1-100 score
+    entry = relationship("FeedEntry", backref="iocs")

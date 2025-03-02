@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Dict
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
-from app.models import Feed, FeedEntry, SecurityAnalysis, DetailedAnalysis
+from app.models import Feed, FeedEntry, SecurityAnalysis, DetailedAnalysis, IOC
 from app.llm_service import LLMService
 
 # Configure feedparser debugging
@@ -54,6 +54,23 @@ class FeedService:
             self.db.commit()
             return entry.llm_summary
         return None
+
+    def get_all_iocs(self) -> List[Dict]:
+        """Get all IOCs with their article context."""
+        logger.debug("Fetching all IOCs")
+        iocs = []
+        for ioc in self.db.query(IOC).order_by(IOC.discovered_date.desc()).all():
+            entry = self.db.query(FeedEntry).get(ioc.entry_id)
+            iocs.append({
+                "type": ioc.type,
+                "value": ioc.value,
+                "context": ioc.context,
+                "article_title": entry.title if entry else "Unknown",
+                "discovered_date": ioc.discovered_date.isoformat(),
+                "confidence_score": ioc.confidence_score
+            })
+        logger.debug(f"Found {len(iocs)} IOCs")
+        return iocs
 
     def get_latest_entries(self, feed_id: int = None, category: str = None, only_unread: bool = True, limit: int = 20) -> List[FeedEntry]:
         """Get latest entries either by feed_id or category."""
@@ -122,12 +139,30 @@ class FeedService:
             if not entry.security_analysis:
                 entry.security_analysis = SecurityAnalysis()
             
+            # Store IOCs in the SecurityAnalysis table
             entry.security_analysis.iocs = str(iocs)
             entry.security_analysis.sigma_rule = sigma_rule
             entry.security_analysis.analysis_date = datetime.utcnow()
+            
+            # Store individual IOCs in the IOC table
+            for ioc in iocs:
+                ioc_record = IOC(
+                    type=ioc['type'],
+                    value=ioc['value'],
+                    context=ioc.get('context', ''),
+                    entry_id=entry_id,
+                    confidence_score=ioc.get('confidence', 100)
+                )
+                self.db.add(ioc_record)
+            
             self.db.commit()
             
-            return {"iocs": iocs, "sigma_rule": sigma_rule}
+            return {
+                "iocs": iocs,
+                "sigma_rule": sigma_rule,
+                "iocs_found": len(iocs) > 0,
+                "feed_id": entry.feed_id
+            }
         return None
 
     def add_feed(self, url: str, is_security_feed: bool = False, title: str = None, category: str = None) -> Feed:
@@ -317,12 +352,24 @@ class FeedService:
                             iocs, sigma_rule = self.llm_service.analyze_security_content(new_entry.content)
                             logger.debug("Security analysis completed")
                             
+                            # Store security analysis
                             security_analysis = SecurityAnalysis(
                                 entry_id=new_entry.id,
                                 iocs=str(iocs),
                                 sigma_rule=sigma_rule
                             )
                             self.db.add(security_analysis)
+
+                            # Store individual IOCs
+                            for ioc in iocs:
+                                ioc_record = IOC(
+                                    type=ioc['type'],
+                                    value=ioc['value'],
+                                    context=ioc.get('context', ''),
+                                    entry_id=new_entry.id,
+                                    confidence_score=ioc.get('confidence', 100)
+                                )
+                                self.db.add(ioc_record)
                         except Exception as e:
                             logger.error(f"Error in security analysis: {str(e)}")
 

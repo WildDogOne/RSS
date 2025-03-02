@@ -96,6 +96,8 @@ if 'selected_category' not in st.session_state:
     st.session_state.selected_category = None
 if 'scheduler' not in st.session_state:
     st.session_state.scheduler = None
+if 'current_view' not in st.session_state:
+    st.session_state.current_view = 'entries'
 
 # Set initial log level and SQLAlchemy logging
 root_logger.setLevel(getattr(logging, st.session_state.log_level))
@@ -370,6 +372,34 @@ def render_console():
             else:
                 st.warning("Debug logging is disabled. Enable it in Settings to view logs.")
 
+def render_ioc_view(feed_service: FeedService):
+    """Render IOC view."""
+    st.header("🛡️ Indicators of Compromise")
+    
+    # Get all IOCs
+    iocs = feed_service.get_all_iocs()
+    
+    if not iocs:
+        st.info("No IOCs found")
+        return
+    
+    # Display IOCs with filtering options
+    ioc_types = list(set(ioc["type"] for ioc in iocs))
+    selected_type = st.selectbox("Filter by type", ["All"] + ioc_types)
+    
+    filtered_iocs = iocs
+    if selected_type != "All":
+        filtered_iocs = [ioc for ioc in iocs if ioc["type"] == selected_type]
+    
+    for ioc in filtered_iocs:
+        with st.expander(f"{ioc['type']}: {ioc['value']}", expanded=True):
+            st.write(f"Found in: {ioc['article_title']}")
+            if ioc['context']:
+                st.markdown("**Context:**")
+                st.write(ioc['context'])
+            st.caption(f"Discovered: {ioc['discovered_date']}")
+            st.progress(ioc['confidence_score'] / 100, text=f"Confidence: {ioc['confidence_score']}%")
+
 def render_entries(feed_service: FeedService, db_session: Session):
     """Render feed entries based on selection."""
     # View controls
@@ -521,7 +551,16 @@ def main():
 
         # Render main content and sidebars
         render_sidebar(feed_service)
-        render_entries(feed_service, db_session)
+        
+        # View selector
+        current_view = st.radio("View", options=["Entries", "IOCs"], horizontal=True)
+        
+        # Render selected view
+        if current_view == "Entries":
+            render_entries(feed_service, db_session)
+        else:
+            render_ioc_view(feed_service)
+            
         render_console()
             
     finally:

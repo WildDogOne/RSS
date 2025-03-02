@@ -40,10 +40,18 @@
         <div id="entriesModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden">
             <div class="bg-white p-6 rounded-lg shadow-lg w-3/4 mx-auto mt-20 max-h-[80vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-semibold" id="modalTitle">Feed Entries</h3>
+                    <div>
+                        <h3 class="text-xl font-semibold" id="modalTitle">Feed Entries</h3>
+                        <div class="mt-2">
+                            <button onclick="switchTab('entries')" id="entriesTab" class="px-4 py-2 bg-blue-500 text-white rounded-lg">Entries</button>
+                            <button onclick="switchTab('iocs')" id="iocsTab" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg">IOCs</button>
+                        </div>
+                    </div>
                     <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">✕</button>
                 </div>
                 <div id="entriesList" class="space-y-4">
+                </div>
+                <div id="iocsList" class="space-y-4 hidden">
                     <!-- Entries will be loaded here -->
                 </div>
             </div>
@@ -155,6 +163,58 @@
         function closeModal() {
             document.getElementById('entriesModal').classList.add('hidden');
         }
+        function switchTab(tab) {
+            const entriesList = document.getElementById('entriesList');
+            const iocsList = document.getElementById('iocsList');
+            const entriesTab = document.getElementById('entriesTab');
+            const iocsTab = document.getElementById('iocsTab');
+
+            if (tab === 'entries') {
+                entriesList.classList.remove('hidden');
+                iocsList.classList.add('hidden');
+                entriesTab.classList.replace('bg-gray-300', 'bg-blue-500');
+                entriesTab.classList.replace('text-gray-700', 'text-white');
+                iocsTab.classList.replace('bg-blue-500', 'bg-gray-300');
+                iocsTab.classList.replace('text-white', 'text-gray-700');
+            } else {
+                entriesList.classList.add('hidden');
+                iocsList.classList.remove('hidden');
+                iocsTab.classList.replace('bg-gray-300', 'bg-blue-500');
+                iocsTab.classList.replace('text-gray-700', 'text-white');
+                entriesTab.classList.replace('bg-blue-500', 'bg-gray-300');
+                entriesTab.classList.replace('text-white', 'text-gray-700');
+                loadIOCs();
+            }
+        }
+
+        async function loadIOCs() {
+            try {
+                const response = await fetch('/api/iocs');
+                const iocs = await response.json();
+                
+                const iocsList = document.getElementById('iocsList');
+                iocsList.innerHTML = iocs.map(ioc => `
+                    <div class="border p-4 rounded bg-white">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-semibold text-red-600">IOC Type: ${ioc.type}</h4>
+                                <p class="text-lg font-mono mt-1">${ioc.value}</p>
+                                <p class="text-sm text-gray-600 mt-2">
+                                    Found in article: ${ioc.article_title}
+                                </p>
+                                <p class="mt-2">${ioc.context || ''}</p>
+                            </div>
+                            <span class="text-sm text-gray-500">
+                                ${new Date(ioc.discovered_date).toLocaleString()}
+                            </span>
+                        </div>
+                    </div>
+                `).join('') || '<p class="text-center text-gray-500">No IOCs found</p>';
+            } catch (error) {
+                console.error('Error loading IOCs:', error);
+            }
+        }
+
         async function analyzeContent(entryId) {
             try {
                 const response = await fetch(`/api/entries/${entryId}/analyze`, {
@@ -164,8 +224,13 @@
                 if (response.ok) {
                     const result = await response.json();
                     if (result.success) {
-                        // Refresh the entries display
-                        showEntries(st.session_state.selected_feed);
+                        // Switch to IOCs tab if IOCs were found
+                        if (result.iocs_found) {
+                            switchTab('iocs');
+                        } else {
+                            // Refresh the entries display
+                            showEntries(result.feed_id);
+                        }
                     } else {
                         alert('Failed to analyze content: ' + result.error);
                     }
