@@ -24,7 +24,14 @@ class FeedService:
             return entry.llm_summary
         return None
 
+    def get_unread_entries(self, feed_id: int, limit: int = 20) -> List[FeedEntry]:
+        return self.db.query(FeedEntry).filter(
+            FeedEntry.feed_id == feed_id,
+            FeedEntry.is_read == False
+        ).order_by(FeedEntry.published_date.desc()).limit(limit).all()
+
     def analyze_security(self, entry_id: int) -> dict:
+        """Always perform security analysis regardless of feed type."""
         entry = self.db.query(FeedEntry).get(entry_id)
         if entry:
             iocs, sigma_rule = self.llm_service.analyze_security_content(entry.content)
@@ -78,6 +85,15 @@ class FeedService:
             self.db.delete(feed)
             self.db.commit()
 
+    def update_feed(self, feed_id: int, category: str = None, title: str = None) -> None:
+        feed = self.db.query(Feed).get(feed_id)
+        if feed:
+            if category is not None:
+                feed.category = category
+            if title is not None:
+                feed.title = title
+            self.db.commit()
+
     def _process_feed(self, feed: Feed) -> None:
         parsed = feedparser.parse(feed.url)
         
@@ -111,16 +127,15 @@ class FeedService:
 
             self.db.add(new_entry)
 
-            # If it's a security feed, perform security analysis
-            if feed.is_security_feed:
-                iocs, sigma_rule = self.llm_service.analyze_security_content(new_entry.content)
-                
-                security_analysis = SecurityAnalysis(
-                    entry_id=new_entry.id,
-                    iocs=str(iocs),
-                    sigma_rule=sigma_rule
-                )
-                self.db.add(security_analysis)
+            # Always perform security analysis for new entries
+            iocs, sigma_rule = self.llm_service.analyze_security_content(new_entry.content)
+            
+            security_analysis = SecurityAnalysis(
+                entry_id=new_entry.id,
+                iocs=str(iocs),
+                sigma_rule=sigma_rule
+            )
+            self.db.add(security_analysis)
 
         feed.last_fetched = datetime.utcnow()
         self.db.commit()

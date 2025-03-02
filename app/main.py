@@ -10,12 +10,8 @@ from app.models import Base, Feed, FeedEntry, SecurityAnalysis
 from app.feed_service import FeedService
 from app.llm_service import LLMService
 
-# Remove existing database to recreate with new schema
-database_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'rss.db')
-if os.path.exists(database_path):
-    os.remove(database_path)
-
 # Database setup
+database_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'rss.db')
 os.makedirs(os.path.dirname(database_path), exist_ok=True)
 engine = create_engine(f'sqlite:///{database_path}')
 Base.metadata.create_all(engine)
@@ -130,7 +126,7 @@ def main():
                 st.error(f"Error importing OPML: {str(e)}")
     
     # Main content area
-    overview_tab, feeds_tab, security_tab = st.tabs(["Overview", "Feed Entries", "Security Analysis"])
+    overview_tab, feeds_tab = st.tabs(["Overview", "Feed Entries"])
     
     with overview_tab:
         db = Session()
@@ -150,10 +146,29 @@ def main():
         for category, category_feeds in feeds_by_category.items():
             with st.expander(f"📁 {category} ({len(category_feeds)} feeds)", expanded=True):
                 for feed in category_feeds:
-                    col1, col2 = st.columns([4, 1])
+                    # Initialize session state for edit mode
+                    edit_key = f"edit_mode_{feed.id}"
+                    if edit_key not in st.session_state:
+                        st.session_state[edit_key] = False
+
+                    col1, col2, col3 = st.columns([3, 1, 1])
                     with col1:
-                        st.write(f"**{feed.title or feed.url}**")
+                        if st.session_state[edit_key]:
+                            new_title = st.text_input("Title", feed.title or feed.url, key=f"title_{feed.id}")
+                            new_category = st.text_input("Category", feed.category or "", key=f"category_{feed.id}")
+                            if st.button("Save", key=f"save_{feed.id}"):
+                                feed_service.update_feed(feed.id, new_category, new_title)
+                                st.session_state[edit_key] = False
+                                st.rerun()
+                        else:
+                            st.write(f"**{feed.title or feed.url}**")
+                    
                     with col2:
+                        if st.button("✏️", key=f"edit_{feed.id}", help="Edit feed"):
+                            st.session_state[edit_key] = True
+                            st.rerun()
+                    
+                    with col3:
                         if st.button("🗑️", key=f"delete_{feed.id}", help="Delete feed"):
                             feed_service.remove_feed(feed.id)
                             st.rerun()
@@ -231,52 +246,48 @@ def main():
             )
             
             if selected_feed:
-                entries = db.query(FeedEntry).filter(FeedEntry.feed_id == selected_feed.id).all()
+                entries = feed_service.get_unread_entries(selected_feed.id)
+                st.write(f"### Latest Unread Entries ({len(entries)})")
                 for entry in entries:
                     with st.expander(entry.title):
                         st.write(f"Published: {entry.published_date}")
                         st.write(f"Link: {entry.link}")
                         st.markdown("### Summary")
-                        st.write(entry.summary)
-                        st.markdown("### Original Content")
-                        st.write(entry.content)
-    
-    with security_tab:
-        security_feeds = db.query(Feed).filter(Feed.is_security_feed == True).all()
-        if not security_feeds:
-            st.info("No security feeds added yet!")
-        else:
-            selected_security_feed = st.selectbox(
-                "Select Security Feed",
-                options=security_feeds,
-                format_func=lambda x: x.title or x.url,
-                key="security_feed"
-            )
-            
-            if selected_security_feed:
-                entries = db.query(FeedEntry).join(SecurityAnalysis).filter(
-                    FeedEntry.feed_id == selected_security_feed.id
-                ).all()
-                
-                for entry in entries:
-                    with st.expander(entry.title):
-                        analysis = db.query(SecurityAnalysis).filter(
-                            SecurityAnalysis.entry_id == entry.id
-                        ).first()
-                        
-                        if analysis:
-                            st.markdown("### IOCs")
-                            iocs = eval(analysis.iocs)
+                        if entry.llm_summary:
+                            st.write(entry.llm_summary)
+                        else:
+                            if st.button("🤖 Generate LLM Summary", key=f"llm_{entry.id}"):
+                                with st.spinner("Generating summary..."):
+                                    feed_service.generate_llm_summary(entry.id)
+                                st.rerun()
+                            st.write(entry.summary)
+
+                        # Always show security analysis
+                        st.markdown("### Security Analysis")
+                        if entry.security_analysis:
+                            iocs = eval(entry.security_analysis.iocs)
                             if iocs:
+                                st.markdown("#### IOCs Found:")
                                 df = pd.DataFrame(iocs)
                                 st.dataframe(df)
-                            else:
-                                st.info("No IOCs found")
                             
-                            st.markdown("### Sigma Rule")
-                            st.code(analysis.sigma_rule)
+                            if entry.security_analysis.sigma_rule and entry.security_analysis.sigma_rule != "No applicable Sigma rule for this content.":
+                                st.markdown("#### Sigma Rule:")
+                                st.code(entry.security_analysis.sigma_rule)
                         else:
-                            st.info("Analysis pending...")
+                            if st.button("🛡️ Analyze Security", key=f"sec_{entry.id}"):
+                                with st.spinner("Analyzing security aspects..."):
+                                    feed_service.analyze_security(entry.id)
+                                st.rerun()
+                        
+                        st.markdown("### Original Content")
+                        st.write(entry.content)
+
+                        if not entry.is_read:
+                            if st.button("📖 Mark as Read", key=f"read_{entry.id}"):
+                                feed_service.mark_as_read(entry.id)
+                                st.rerun()
+    
 
 if __name__ == "__main__":
     main()
