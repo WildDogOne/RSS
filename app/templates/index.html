@@ -122,9 +122,26 @@
                             Published: ${new Date(entry.published_date).toLocaleString()}
                         </p>
                         <p class="mt-2">${entry.summary}</p>
-                        <div class="mt-2">
-                            <a href="${entry.link}" target="_blank" 
-                               class="text-blue-500 hover:underline">Read More</a>
+                        <div class="mt-2 flex justify-between items-center">
+                            <div>
+                                <a href="${entry.link}" target="_blank" 
+                                   class="text-blue-500 hover:underline">Read More</a>
+                            </div>
+                            <div>
+                                ${entry.detailed_analysis ? `
+                                    <div class="bg-green-50 p-4 rounded-lg mt-4">
+                                        <h5 class="font-semibold mb-2">🔍 Detailed Analysis</h5>
+                                        <div class="text-sm space-y-2">
+                                            <p>${entry.detailed_analysis.key_points}</p>
+                                        </div>
+                                    </div>
+                                ` : `
+                                    <button onclick="analyzeContent(${entry.id})" 
+                                            class="bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600">
+                                        🔍 Analyze Content
+                                    </button>
+                                `}
+                            </div>
                         </div>
                     </div>
                 `).join('');
@@ -137,6 +154,28 @@
 
         function closeModal() {
             document.getElementById('entriesModal').classList.add('hidden');
+        }
+        async function analyzeContent(entryId) {
+            try {
+                const response = await fetch(`/api/entries/${entryId}/analyze`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        // Refresh the entries display
+                        showEntries(st.session_state.selected_feed);
+                    } else {
+                        alert('Failed to analyze content: ' + result.error);
+                    }
+                } else {
+                    alert('Error analyzing content');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error analyzing content');
+            }
         }
     </script>
 </body>

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Dict
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
-from app.models import Feed, FeedEntry, SecurityAnalysis
+from app.models import Feed, FeedEntry, SecurityAnalysis, DetailedAnalysis
 from app.llm_service import LLMService
 
 # Configure feedparser debugging
@@ -91,6 +91,25 @@ class FeedService:
             result[category].append(feed)
         logger.debug(f"Found {len(feeds)} feeds in {len(result)} categories")
         return result
+
+    def analyze_detailed_content(self, entry_id: int) -> dict:
+        """Generate detailed analysis for an entry."""
+        entry = self.db.query(FeedEntry).get(entry_id)
+        if entry:
+            logger.debug(f"Performing detailed analysis for entry {entry_id}")
+            analysis = self.llm_service.analyze_detailed_content(entry.content)
+            
+            # Parse the analysis and store in structured format
+            if not entry.detailed_analysis:
+                entry.detailed_analysis = DetailedAnalysis()
+            
+            # Store the analysis
+            entry.detailed_analysis.key_points = analysis
+            entry.detailed_analysis.analysis_date = datetime.utcnow()
+            self.db.commit()
+            
+            return {"analysis": analysis}
+        return None
 
     def analyze_security(self, entry_id: int) -> dict:
         """Always perform security analysis regardless of feed type."""
@@ -289,27 +308,23 @@ class FeedService:
                     self.db.flush()
                     logger.debug(f"Added entry to session with ID: {new_entry.id}")
 
-                    # Generate summary
-                    try:
-                        new_entry.summary = self.llm_service.summarize_article(new_entry.content)
-                        logger.debug("Summary generated successfully")
-                    except Exception as e:
-                        logger.error(f"Error generating summary: {str(e)}")
-                        new_entry.summary = new_entry.content[:300] + "..."
+                    # Set initial summary
+                    new_entry.summary = new_entry.content[:300] + "..."
 
-                    # Perform security analysis
-                    try:
-                        iocs, sigma_rule = self.llm_service.analyze_security_content(new_entry.content)
-                        logger.debug("Security analysis completed")
-                        
-                        security_analysis = SecurityAnalysis(
-                            entry_id=new_entry.id,
-                            iocs=str(iocs),
-                            sigma_rule=sigma_rule
-                        )
-                        self.db.add(security_analysis)
-                    except Exception as e:
-                        logger.error(f"Error in security analysis: {str(e)}")
+                    # Only perform security analysis immediately for security feeds
+                    if feed.is_security_feed:
+                        try:
+                            iocs, sigma_rule = self.llm_service.analyze_security_content(new_entry.content)
+                            logger.debug("Security analysis completed")
+                            
+                            security_analysis = SecurityAnalysis(
+                                entry_id=new_entry.id,
+                                iocs=str(iocs),
+                                sigma_rule=sigma_rule
+                            )
+                            self.db.add(security_analysis)
+                        except Exception as e:
+                            logger.error(f"Error in security analysis: {str(e)}")
 
                     entries_added += 1
                     self.db.commit()

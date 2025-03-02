@@ -158,7 +158,25 @@ def render_header_and_controls(llm_service: LLMService, feed_service: FeedServic
 def render_settings_modal(llm_service: LLMService, feed_service: FeedService):
     """Render settings modal with Ollama config and feed management."""
     if st.session_state.settings_open:
-        with st.expander("Settings", expanded=True):
+        st.markdown("""
+            <style>
+                div[data-testid="stMarkdownContainer"] div.settings-section {
+                    background-color: #f8f9fa;
+                    padding: 1.5rem;
+                    border-radius: 0.5rem;
+                    margin: 1rem 0;
+                    border: 1px solid #dee2e6;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+            <div class="settings-section">
+            <h2 style="margin-top: 0;">⚙️ Settings</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        with st.container():
             # Debug Settings first for easier access
             st.subheader("Debug Settings")
             col1, col2 = st.columns([3, 1])
@@ -295,31 +313,62 @@ def render_sidebar(feed_service: FeedService):
 def render_console():
     """Render debug console in right sidebar."""
     if st.session_state.console_open:
+        # Add global styles for the console
+        st.markdown("""
+            <style>
+                /* Right sidebar styling */
+                section[data-testid="stSidebar"][aria-label="Console"] {
+                    right: 0;
+                    width: 400px !important;
+                    background-color: #f8f9fa;
+                    border-left: 1px solid #dee2e6;
+                }
+                /* Console log styling */
+                div.console-log {
+                    background-color: #ffffff;
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                    margin: 2px 0;
+                    font-family: 'Courier New', monospace;
+                    font-size: 0.8em;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+
+        # Create a new sidebar for the console
         with st.sidebar:
-            st.markdown("### Debug Console")
+            st.markdown("### 🖥️ Debug Console")
             if st.session_state.debug_enabled:
-                # Console controls
+                # Console controls in a compact layout
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    filter_text = st.text_input("🔍 Filter logs", "")
+                    filter_text = st.text_input("🔍", placeholder="Filter logs...", label_visibility="collapsed")
                 with col2:
-                    if st.button("🗑️"):
+                    if st.button("🗑️", help="Clear logs"):
                         memory_stream.clear()
                         st.rerun()
 
-                # Display filtered logs with text wrapping
-                console_container = st.container()
-                with console_container:
-                    logs = memory_stream.get_logs(limit=1000)
-                    for log in logs:
-                        log_text = f"{log['timestamp'].strftime('%H:%M:%S')} - {log['message']}"
-                        if not filter_text or filter_text.lower() in log_text.lower():
-                            st.markdown(
-                                f"<div style='white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 0.8em;'>{log_text}</div>",
-                                unsafe_allow_html=True
-                            )
+                # Close button in top right
+                st.markdown(
+                    """<div style="position: absolute; top: 0; right: 0; padding: 1rem;">
+                        <button class="close-button">❌</button>
+                    </div>""",
+                    unsafe_allow_html=True
+                )
+
+                # Display filtered logs with improved styling
+                logs = memory_stream.get_logs(limit=1000)
+                for log in logs:
+                    log_text = f"{log['timestamp'].strftime('%H:%M:%S')} - {log['message']}"
+                    if not filter_text or filter_text.lower() in log_text.lower():
+                        st.markdown(
+                            f'<div class="console-log">{log_text}</div>',
+                            unsafe_allow_html=True
+                        )
             else:
-                st.info("Debug logging is disabled. Enable it in Settings to view logs.")
+                st.warning("Debug logging is disabled. Enable it in Settings to view logs.")
 
 def render_entries(feed_service: FeedService, db_session: Session):
     """Render feed entries based on selection."""
@@ -334,19 +383,32 @@ def render_entries(feed_service: FeedService, db_session: Session):
         if last_update:
             st.caption(f"Last updated: {last_update.strftime('%H:%M:%S')}")
 
-    # Debug info (always shown in debug mode, but collapsed)
+    # Debug info in a styled container
     if st.session_state.debug_enabled:
-        with st.expander("🐛 Debug Info", expanded=False):
-            st.json({
-                "selected_feed": st.session_state.selected_feed,
-                "selected_category": st.session_state.selected_category,
-                "settings_open": st.session_state.settings_open,
-                "debug_enabled": st.session_state.debug_enabled,
-                "log_level": st.session_state.log_level,
-                "show_read": show_read,
-                "limit": limit,
-                "last_update": last_update.isoformat() if last_update else None
-            })
+        st.markdown("""
+            <style>
+                div[data-testid="stMarkdownContainer"] > div.debug-info {
+                    background-color: #f0f2f6;
+                    padding: 1rem;
+                    border-radius: 0.5rem;
+                    margin: 1rem 0;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        st.markdown('<div class="debug-info">', unsafe_allow_html=True)
+        st.markdown("#### 🐛 Debug Info")
+        st.json({
+            "selected_feed": st.session_state.selected_feed,
+            "selected_category": st.session_state.selected_category,
+            "settings_open": st.session_state.settings_open,
+            "debug_enabled": st.session_state.debug_enabled,
+            "log_level": st.session_state.log_level,
+            "show_read": show_read,
+            "limit": limit,
+            "last_update": last_update.isoformat() if last_update else None
+        })
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")  # Add separator
 
@@ -386,23 +448,41 @@ def render_entries(feed_service: FeedService, db_session: Session):
             
             st.markdown(f"[Read More]({entry.link})")
             
-            # Security Analysis
-            if entry.security_analysis:
-                with st.expander("🛡️ Security Analysis"):
+            # Security Analysis for security feeds
+            if entry.feed.is_security_feed:
+                if entry.security_analysis:
+                    st.markdown("#### 🛡️ Security Analysis")
                     iocs = eval(entry.security_analysis.iocs)
-                    if iocs:
-                        st.markdown("**IOCs Found:**")
-                        df = pd.DataFrame(iocs)
-                        st.dataframe(df)
                     
-                    if entry.security_analysis.sigma_rule and entry.security_analysis.sigma_rule != "No applicable Sigma rule for this content.":
-                        st.markdown("**Sigma Rule:**")
-                        st.code(entry.security_analysis.sigma_rule)
-            else:
-                if st.button("🛡️ Analyze Security", key=f"sec_{entry.id}"):
-                    with st.spinner("Analyzing..."):
-                        feed_service.analyze_security(entry.id)
-                    st.rerun()
+                    # Create two columns for IOCs and Sigma rule
+                    sec_col1, sec_col2 = st.columns(2)
+                    
+                    with sec_col1:
+                        if iocs:
+                            st.markdown("**IOCs Found:**")
+                            df = pd.DataFrame(iocs)
+                            st.dataframe(df, use_container_width=True)
+                    
+                    with sec_col2:
+                        if entry.security_analysis.sigma_rule and entry.security_analysis.sigma_rule != "No applicable Sigma rule for this content.":
+                            st.markdown("**Sigma Rule:**")
+                            st.code(entry.security_analysis.sigma_rule, language="yaml")
+                else:
+                    if st.button("🛡️ Analyze Security", key=f"sec_{entry.id}"):
+                        with st.spinner("Analyzing..."):
+                            feed_service.analyze_security(entry.id)
+                        st.rerun()
+
+            # Detailed Content Analysis Button
+            if st.button("🔍 Analyze Content", key=f"analyze_{entry.id}"):
+                with st.spinner("Analyzing content..."):
+                    result = feed_service.analyze_detailed_content(entry.id)
+                st.rerun()
+            
+            # Show Detailed Analysis if available
+            if entry.detailed_analysis:
+                st.markdown("#### 🔍 Content Analysis")
+                st.markdown(entry.detailed_analysis.key_points)
             
             # Mark as read button
             if not entry.is_read:

@@ -42,6 +42,19 @@ class LLMService:
 Summary:"""
         return self._generate(prompt)
 
+    def analyze_detailed_content(self, content: str) -> str:
+        prompt = f"""Analyze the following article in detail. Include:
+1. Key points and findings
+2. Technical details if present
+3. Impact assessment
+4. Related technologies/concepts mentioned
+5. Any recommendations or conclusions
+
+{content}
+
+Analysis:"""
+        return self._generate(prompt)
+
     def analyze_security_content(self, content: str) -> tuple[list, str]:
         # Extract IOCs
         ioc_prompt = f"""Extract potential Indicators of Compromise (IOCs) from the following security article. 

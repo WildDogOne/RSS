@@ -1,1 +1,1 @@
-{"ollama_url": "http://10.0.0.10:11434", "ollama_model": "llama3.2:3b-instruct-q4_K_M", "debug_enabled": true, "log_level": "INFO"}
+{"ollama_url": "http://10.0.0.10:11434", "ollama_model": "llama3.2:3b-instruct-q4_K_M", "debug_enabled": false, "log_level": "INFO"}
