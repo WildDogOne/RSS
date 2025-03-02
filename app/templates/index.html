@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSS Feed Reader with LLM Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8">RSS Feed Reader</h1>
+        
+        <!-- Add Feed Form -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4">Add New Feed</h2>
+            <form id="addFeedForm" class="space-y-4">
+                <div>
+                    <input type="url" id="feedUrl" placeholder="Enter RSS feed URL" required
+                           class="w-full p-2 border rounded">
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="isSecurityFeed" class="mr-2">
+                    <label for="isSecurityFeed">This is a security-related feed</label>
+                </div>
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Add Feed
+                </button>
+            </form>
+        </div>
+
+        <!-- Feeds List -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-4">Your Feeds</h2>
+            <div id="feedsList" class="space-y-4">
+                <!-- Feeds will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Feed Entries Modal -->
+        <div id="entriesModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden">
+            <div class="bg-white p-6 rounded-lg shadow-lg w-3/4 mx-auto mt-20 max-h-[80vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold" id="modalTitle">Feed Entries</h3>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">✕</button>
+                </div>
+                <div id="entriesList" class="space-y-4">
+                    <!-- Entries will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load feeds on page load
+        document.addEventListener('DOMContentLoaded', loadFeeds);
+
+        // Add feed form submission
+        document.getElementById('addFeedForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('feedUrl').value;
+            const isSecurityFeed = document.getElementById('isSecurityFeed').checked;
+
+            try {
+                const response = await fetch('/api/feeds', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url, is_security_feed: isSecurityFeed })
+                });
+
+                if (response.ok) {
+                    document.getElementById('feedUrl').value = '';
+                    document.getElementById('isSecurityFeed').checked = false;
+                    loadFeeds();
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Failed to add feed');
+                }
+            } catch (error) {
+                alert('Error adding feed');
+            }
+        });
+
+        async function loadFeeds() {
+            try {
+                const response = await fetch('/api/feeds');
+                const feeds = await response.json();
+                
+                const feedsList = document.getElementById('feedsList');
+                feedsList.innerHTML = feeds.map(feed => `
+                    <div class="border p-4 rounded hover:bg-gray-50">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="font-semibold">${feed.title || feed.url}</h3>
+                                <p class="text-sm text-gray-600">
+                                    ${feed.is_security_feed ? '🛡️ Security Feed' : 'RSS Feed'}
+                                </p>
+                            </div>
+                            <button onclick="showEntries(${feed.id})" 
+                                    class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
+                                View Entries
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading feeds:', error);
+            }
+        }
+
+        async function showEntries(feedId) {
+            try {
+                const response = await fetch(`/api/feeds/${feedId}/entries`);
+                const entries = await response.json();
+                
+                const entriesList = document.getElementById('entriesList');
+                entriesList.innerHTML = entries.map(entry => `
+                    <div class="border p-4 rounded">
+                        <h4 class="font-semibold">${entry.title}</h4>
+                        <p class="text-sm text-gray-600">
+                            Published: ${new Date(entry.published_date).toLocaleString()}
+                        </p>
+                        <p class="mt-2">${entry.summary}</p>
+                        <div class="mt-2">
+                            <a href="${entry.link}" target="_blank" 
+                               class="text-blue-500 hover:underline">Read More</a>
+                        </div>
+                    </div>
+                `).join('');
+
+                document.getElementById('entriesModal').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading entries:', error);
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('entriesModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
