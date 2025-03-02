@@ -1,1 +1,1 @@
-{"ollama_url": "http://10.0.0.10:11434", "ollama_model": "exaone3.5:32b"}
+{"ollama_url": "http://10.0.0.10:11434", "ollama_model": "llama3.2:3b-instruct-q4_K_M"}

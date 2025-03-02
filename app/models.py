@@ -11,6 +11,7 @@ class Feed(Base):
     id = Column(Integer, primary_key=True)
     url = Column(String(500), unique=True, nullable=False)
     title = Column(String(200))
+    category = Column(String(200), nullable=True)
     last_fetched = Column(DateTime, default=datetime.utcnow)
     is_security_feed = Column(Boolean, default=False)
     entries = relationship("FeedEntry", back_populates="feed", cascade="all, delete-orphan")
@@ -25,6 +26,9 @@ class FeedEntry(Base):
     published_date = Column(DateTime)
     content = Column(Text)
     summary = Column(Text)
+    is_read = Column(Boolean, default=False)
+    llm_summary = Column(Text, nullable=True)  # On-demand LLM summary
+    security_analysis = relationship("SecurityAnalysis", uselist=False, back_populates="entry")
     feed = relationship("Feed", back_populates="entries")
 
 class SecurityAnalysis(Base):
@@ -35,3 +39,4 @@ class SecurityAnalysis(Base):
     iocs = Column(Text)  # JSON string of extracted IOCs
     sigma_rule = Column(Text)  # Generated Sigma rule
     analysis_date = Column(DateTime, default=datetime.utcnow)
+    entry = relationship("FeedEntry", back_populates="security_analysis")

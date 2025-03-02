@@ -10,15 +10,59 @@ class FeedService:
         self.db = db_session
         self.llm_service = llm_service
 
-    def add_feed(self, url: str, is_security_feed: bool = False) -> Feed:
+    def mark_as_read(self, entry_id: int) -> None:
+        entry = self.db.query(FeedEntry).get(entry_id)
+        if entry:
+            entry.is_read = True
+            self.db.commit()
+
+    def generate_llm_summary(self, entry_id: int) -> str:
+        entry = self.db.query(FeedEntry).get(entry_id)
+        if entry:
+            entry.llm_summary = self.llm_service.summarize_article(entry.content)
+            self.db.commit()
+            return entry.llm_summary
+        return None
+
+    def analyze_security(self, entry_id: int) -> dict:
+        entry = self.db.query(FeedEntry).get(entry_id)
+        if entry:
+            iocs, sigma_rule = self.llm_service.analyze_security_content(entry.content)
+            
+            # Create or update security analysis
+            if not entry.security_analysis:
+                entry.security_analysis = SecurityAnalysis()
+            
+            entry.security_analysis.iocs = str(iocs)
+            entry.security_analysis.sigma_rule = sigma_rule
+            entry.security_analysis.analysis_date = datetime.utcnow()
+            self.db.commit()
+            
+            return {"iocs": iocs, "sigma_rule": sigma_rule}
+        return None
+
+    def add_feed(self, url: str, is_security_feed: bool = False, title: str = None, category: str = None) -> Feed:
         existing_feed = self.db.query(Feed).filter(Feed.url == url).first()
         if existing_feed:
-            if existing_feed.is_security_feed != is_security_feed:
+            if any([
+                existing_feed.is_security_feed != is_security_feed,
+                (title and existing_feed.title != title),
+                (category and existing_feed.category != category)
+            ]):
                 existing_feed.is_security_feed = is_security_feed
+                if title:
+                    existing_feed.title = title
+                if category:
+                    existing_feed.category = category
                 self.db.commit()
             return existing_feed
         
-        feed = Feed(url=url, is_security_feed=is_security_feed)
+        feed = Feed(
+            url=url,
+            is_security_feed=is_security_feed,
+            title=title,
+            category=category
+        )
         self.db.add(feed)
         self.db.commit()
         return feed
@@ -28,11 +72,17 @@ class FeedService:
         for feed in feeds:
             self._process_feed(feed)
 
+    def remove_feed(self, feed_id: int) -> None:
+        feed = self.db.query(Feed).get(feed_id)
+        if feed:
+            self.db.delete(feed)
+            self.db.commit()
+
     def _process_feed(self, feed: Feed) -> None:
         parsed = feedparser.parse(feed.url)
         
-        # Update feed title if available
-        if 'title' in parsed.feed:
+        # Update feed title if not already set
+        if not feed.title and 'title' in parsed.feed:
             feed.title = parsed.feed.title
 
         for entry in parsed.entries:
