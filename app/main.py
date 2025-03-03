@@ -467,14 +467,23 @@ def render_entries(feed_service: FeedService, db_session: Session):
             st.markdown(f"*{entry.feed.category} / {entry.feed.title}* - {entry.published_date.strftime('%Y-%m-%d %H:%M')}")
             
             # Summary
-            if entry.llm_summary:
-                st.write(entry.llm_summary)
-            else:
-                if st.button("🤖 Generate Summary", key=f"llm_{entry.id}"):
-                    with st.spinner("Generating summary..."):
-                        feed_service.generate_llm_summary(entry.id)
-                    st.rerun()
-                st.write(entry.summary or entry.content[:300] + "...")
+            summary_col1, summary_col2 = st.columns([6, 1])
+            with summary_col1:
+                if entry.llm_summary:
+                    st.write(entry.llm_summary)
+                else:
+                    st.write(entry.summary or entry.content[:300] + "...")
+            with summary_col2:
+                if entry.llm_summary:
+                    if st.button("🔄 Refresh", key=f"refresh_summary_{entry.id}"):
+                        with st.spinner("Refreshing summary..."):
+                            feed_service.generate_llm_summary(entry.id)
+                        st.rerun()
+                else:
+                    if st.button("🤖 Generate", key=f"llm_{entry.id}"):
+                        with st.spinner("Generating summary..."):
+                            feed_service.generate_llm_summary(entry.id)
+                        st.rerun()
             
             st.markdown(f"[Read More]({entry.link})")
             
