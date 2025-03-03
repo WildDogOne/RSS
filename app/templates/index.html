@@ -36,26 +36,31 @@
             </div>
         </div>
 
-        <!-- Feed Entries Modal -->
-        <div id="entriesModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden">
-            <div class="bg-white p-6 rounded-lg shadow-lg w-3/4 mx-auto mt-20 max-h-[80vh] overflow-y-auto">
-                <div class="flex justify-between items-center mb-4">
-                    <div>
-                        <h3 class="text-xl font-semibold" id="modalTitle">Feed Entries</h3>
-                        <div class="mt-2">
-                            <button onclick="switchTab('entries')" id="entriesTab" class="px-4 py-2 bg-blue-500 text-white rounded-lg">Entries</button>
-                            <button onclick="switchTab('iocs')" id="iocsTab" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg">IOCs</button>
-                        </div>
-                    </div>
-                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">✕</button>
+        <!-- Feed Content Display -->
+        <dialog id="entriesModal" class="fixed inset-0 w-full h-full bg-transparent hidden">
+            <article class="bg-white p-6 rounded-lg shadow-lg w-3/4 mx-auto mt-20 relative">
+                <header class="mb-4">
+                    <button onclick="closeModal()" class="absolute right-4 top-4 text-gray-500 hover:text-gray-700">✕</button>
+                    <h3 class="text-xl font-semibold pr-8" id="modalTitle">Feed Content</h3>
+                </header>
+                <div class="border-b mb-4 pb-2 flex items-center gap-2">
+                    <span class="text-sm text-gray-600 mr-2">View:</span>
+                    <button onclick="switchTab('entries')" id="entriesTab" 
+                            class="px-4 py-1 bg-blue-500 text-white rounded text-sm">
+                        Entries
+                    </button>
+                    <button onclick="switchTab('iocs')" id="iocsTab" 
+                            class="px-4 py-1 bg-gray-300 text-gray-700 rounded text-sm">
+                        IOCs
+                    </button>
                 </div>
-                <div id="entriesList" class="space-y-4">
+                <div class="max-h-[60vh] overflow-y-auto" id="contentArea">
+                    <div id="entriesList" class="space-y-4"></div>
+                    <div id="iocsList" class="space-y-4 hidden"></div>
                 </div>
-                <div id="iocsList" class="space-y-4 hidden">
-                    <!-- Entries will be loaded here -->
-                </div>
-            </div>
-        </div>
+            </article>
+            <div class="fixed inset-0 bg-gray-600 bg-opacity-50 -z-10"></div>
+        </dialog>
     </div>
 
     <script>
@@ -124,64 +129,64 @@
                 
                 const entriesList = document.getElementById('entriesList');
                 entriesList.innerHTML = entries.map(entry => `
-                    <div class="border p-4 rounded">
-                        <h4 class="font-semibold">${entry.title}</h4>
-                        <p class="text-sm text-gray-600">
-                            Published: ${new Date(entry.published_date).toLocaleString()}
-                        </p>
-                        <p class="mt-2">${entry.summary}</p>
-                        <div class="mt-2 flex justify-between items-center">
-                            <div>
-                                <a href="${entry.link}" target="_blank" 
-                                   class="text-blue-500 hover:underline">Read More</a>
-                            </div>
-                            <div>
-                                ${entry.detailed_analysis ? `
-                                    <div class="bg-green-50 p-4 rounded-lg mt-4">
-                                        <div class="flex justify-between items-center mb-2">
-                                            <h5 class="font-semibold">🔍 Detailed Analysis</h5>
-                                            <button onclick="analyzeContent(${entry.id})" 
-                                                    class="text-indigo-500 hover:text-indigo-600">
-                                                🔄 Refresh
-                                            </button>
-                                        </div>
-                                        <div class="text-sm space-y-2">
-                                            <p>${entry.detailed_analysis.key_points}</p>
-                                        </div>
-                                    </div>
-                                ` : `
+                    <article class="border p-4 rounded">
+                        <header class="mb-4">
+                            <h4 class="font-semibold">${entry.title}</h4>
+                            <time class="text-sm text-gray-600">
+                                Published: ${new Date(entry.published_date).toLocaleString()}
+                            </time>
+                        </header>
+                        <p class="mb-4">${entry.summary}</p>
+                        <div class="flex justify-between items-center border-t pt-4">
+                            <a href="${entry.link}" target="_blank" 
+                               class="text-blue-500 hover:underline">Read More</a>
+                            <div class="flex gap-2">
+                                ${!entry.detailed_analysis ? `
                                     <button onclick="analyzeContent(${entry.id})" 
                                             class="bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600">
-                                        🔍 Analyze Content
+                                        🔍 Analyze
                                     </button>
-                                `}
-
-                                ${entry.security_analysis ? `
-                                    <div class="bg-red-50 p-4 rounded-lg mt-4">
+                                ` : ''}
+                                ${!entry.security_analysis ? `
+                                    <button onclick="analyzeSecurityContent(${entry.id})" 
+                                            class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">
+                                        🛡️ Security
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="border-t mt-4 pt-4">
+                            <div class="grid gap-4">
+                                ${entry.detailed_analysis ? `
+                                    <div class="bg-white border rounded p-3">
                                         <div class="flex justify-between items-center mb-2">
-                                            <h5 class="font-semibold">🛡️ Security Analysis</h5>
-                                            <button onclick="analyzeSecurityContent(${entry.id})" 
-                                                    class="text-red-500 hover:text-red-600">
+                                            <span class="text-sm font-semibold">🔍 Analysis</span>
+                                            <button onclick="analyzeContent(${entry.id})" 
+                                                    class="text-indigo-500 hover:text-indigo-600 text-sm">
                                                 🔄 Refresh
                                             </button>
                                         </div>
-                                        <div class="text-sm space-y-2">
-                                            ${entry.security_analysis.iocs ? `
-                                                <p>IOCs found - see IOCs tab for details</p>
-                                            ` : `
-                                                <p>No IOCs found</p>
-                                            `}
+                                        <div class="text-sm">${entry.detailed_analysis.key_points}</div>
+                                    </div>
+                                ` : ''}
+                                ${entry.security_analysis ? `
+                                    <div class="bg-white border rounded p-3">
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-sm font-semibold">🛡️ Security</span>
+                                            <button onclick="analyzeSecurityContent(${entry.id})" 
+                                                    class="text-red-500 hover:text-red-600 text-sm">
+                                                🔄 Refresh
+                                            </button>
+                                        </div>
+                                        <div class="text-sm">
+                                            ${entry.security_analysis.iocs ? 'IOCs found - see IOCs tab for details' : 'No IOCs found'}
                                         </div>
                                     </div>
-                                ` : `
-                                    <button onclick="analyzeSecurityContent(${entry.id})" 
-                                            class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 mt-2">
-                                        🛡️ Analyze Security
-                                    </button>
-                                `}
+                                ` : ''}
                             </div>
                         </div>
-                    </div>
+                    </article>
                 `).join('');
 
                 document.getElementById('entriesModal').classList.remove('hidden');
@@ -191,7 +196,18 @@
         }
 
         function closeModal() {
-            document.getElementById('entriesModal').classList.add('hidden');
+            const modal = document.getElementById('entriesModal');
+            modal.classList.add('hidden');
+            // Reset content
+            document.getElementById('entriesList').innerHTML = '';
+            document.getElementById('iocsList').innerHTML = '';
+            // Reset tabs
+            document.getElementById('entriesTab').classList.replace('bg-gray-300', 'bg-blue-500');
+            document.getElementById('entriesTab').classList.replace('text-gray-700', 'text-white');
+            document.getElementById('iocsTab').classList.replace('bg-blue-500', 'bg-gray-300');
+            document.getElementById('iocsTab').classList.replace('text-white', 'text-gray-700');
+            document.getElementById('entriesList').classList.remove('hidden');
+            document.getElementById('iocsList').classList.add('hidden');
         }
         
         function switchTab(tab) {
@@ -225,21 +241,30 @@
                 
                 const iocsList = document.getElementById('iocsList');
                 iocsList.innerHTML = iocs.map(ioc => `
-                    <div class="border p-4 rounded bg-white">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <h4 class="font-semibold text-red-600">IOC Type: ${ioc.type}</h4>
-                                <p class="text-lg font-mono mt-1">${ioc.value}</p>
-                                <p class="text-sm text-gray-600 mt-2">
-                                    Found in article: ${ioc.article_title}
-                                </p>
-                                <p class="mt-2">${ioc.context || ''}</p>
+                    <article class="bg-white mb-4 overflow-hidden rounded-lg border">
+                        <div class="p-4">
+                            <div class="flex justify-between mb-2">
+                                <strong class="text-red-600">IOC Type: ${ioc.type}</strong>
+                                <time class="text-sm text-gray-500">
+                                    ${new Date(ioc.discovered_date).toLocaleString()}
+                                </time>
                             </div>
-                            <span class="text-sm text-gray-500">
-                                ${new Date(ioc.discovered_date).toLocaleString()}
-                            </span>
+                            <pre class="bg-gray-50 p-2 rounded font-mono text-sm overflow-x-auto">${ioc.value}</pre>
                         </div>
-                    </div>
+                        <div class="border-t bg-gray-50 p-4">
+                            <div class="text-sm text-gray-600">
+                                Found in: ${ioc.article_title}
+                            </div>
+                            ${ioc.context ? `
+                                <div class="mt-2">
+                                    <div class="text-sm font-medium text-gray-700 mb-2">Context:</div>
+                                    <div class="bg-white text-sm text-gray-600 p-2 rounded border">
+                                        ${ioc.context}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </article>
                 `).join('') || '<p class="text-center text-gray-500">No IOCs found</p>';
             } catch (error) {
                 console.error('Error loading IOCs:', error);

@@ -94,9 +94,12 @@ Your response should be a structured output with:
         # Use Pydantic model schema for structured output
         analysis_schema = SecurityAnalysis.model_json_schema()
 
-        # Get structured response
+        # Get structured response and filter thinking tags before JSON parsing
         response = self._generate(ioc_prompt, format_schema=analysis_schema)
         try:
+            # Filter thinking tags while preserving JSON structure
+            if any(model in self.model.lower() for model in ["deepseek", "yi"]):
+                response = self._filter_thinking_tags(response)
             analysis = SecurityAnalysis.model_validate_json(response)
             return (
                 analysis.iocs,
