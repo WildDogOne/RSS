@@ -533,16 +533,25 @@ def render_entries(feed_service: FeedService, db_session: Session):
                             feed_service.analyze_security(entry.id)
                         st.rerun()
 
-            # Detailed Content Analysis Button
-            if st.button("🔍 Analyze Content", key=f"analyze_{entry.id}"):
-                with st.spinner("Analyzing content..."):
-                    result = feed_service.analyze_detailed_content(entry.id)
-                st.rerun()
-            
-            # Show Detailed Analysis if available
-            if entry.detailed_analysis:
-                st.markdown("#### 🔍 Content Analysis")
-                st.markdown(entry.detailed_analysis.key_points)
+            # Detailed Content Analysis
+            content_col1, content_col2 = st.columns([6, 1])
+            with content_col1:
+                if entry.detailed_analysis:
+                    st.markdown("#### 🔍 Content Analysis")
+                    st.markdown(entry.detailed_analysis.key_points)
+
+            with content_col2:
+                button_key = f"analyze_{entry.id}"
+                if entry.detailed_analysis:
+                    if st.button("🔄 Refresh", key=f"refresh_{button_key}"):
+                        with st.spinner("Refreshing content analysis..."):
+                            feed_service.analyze_detailed_content(entry.id)
+                        st.rerun()
+                else:
+                    if st.button("🔍 Analyze", key=button_key):
+                        with st.spinner("Analyzing content..."):
+                            feed_service.analyze_detailed_content(entry.id)
+                        st.rerun()
             
             # Mark as read button
             if not entry.is_read:
