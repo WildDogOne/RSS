@@ -481,21 +481,33 @@ def render_entries(feed_service: FeedService, db_session: Session):
             # Security Analysis section
             if entry.security_analysis:
                 st.markdown("#### 🛡️ Security Analysis")
-                iocs = eval(entry.security_analysis.iocs)
-                
-                # Create two columns for IOCs and Sigma rule
-                sec_col1, sec_col2 = st.columns(2)
-                
-                with sec_col1:
+                try:
+                    iocs = eval(entry.security_analysis.iocs)
                     if iocs:
                         st.markdown("**IOCs Found:**")
-                        df = pd.DataFrame(iocs)
-                        st.dataframe(df, use_container_width=True)
-                
-                with sec_col2:
-                    if entry.security_analysis.sigma_rule and entry.security_analysis.sigma_rule != "No applicable Sigma rule for this content.":
-                        st.markdown("**Sigma Rule:**")
-                        st.code(entry.security_analysis.sigma_rule, language="yaml")
+                        # Create a nicely formatted table view of IOCs
+                        ioc_data = []
+                        for ioc in iocs:
+                            ioc_data.append({
+                                "Type": ioc['type'],
+                                "Value": ioc['value'],
+                                "Confidence": f"{ioc.get('confidence', 100)}%"
+                            })
+                        df = pd.DataFrame(ioc_data)
+                        st.table(df)
+                        
+                        # Show context for each IOC in expandable sections
+                        st.markdown("**IOC Context:**")
+                        for ioc in iocs:
+                            with st.expander(f"{ioc['type']}: {ioc['value']}", expanded=False):
+                                if ioc.get('context'):
+                                    st.write(ioc['context'])
+                except Exception as e:
+                    st.error(f"Error displaying IOCs: {str(e)}")
+
+                if entry.security_analysis.sigma_rule and entry.security_analysis.sigma_rule != "No applicable Sigma rule for this content.":
+                    st.markdown("**Sigma Rule:**")
+                    st.code(entry.security_analysis.sigma_rule, language="yaml")
             
             # Security Analysis Button
             if not entry.security_analysis:

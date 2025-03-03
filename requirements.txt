@@ -6,3 +6,4 @@ python-dotenv
 apscheduler
 pandas
 plotly
+pydantic>=2.0.0

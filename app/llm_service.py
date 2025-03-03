@@ -1,6 +1,6 @@
 import json
 import requests
-
+from app.schemas import SecurityAnalysis, IOC
 
 class LLMService:
     def __init__(self, base_url="http://ollama:11434", model="mistral"):
@@ -17,11 +17,19 @@ class LLMService:
             print(f"Error getting models: {str(e)}")
             return ["mistral"]  # Return default model as fallback
 
-    def _generate(self, prompt: str) -> str:
+    def _generate(self, prompt: str, format_schema: dict = None) -> str:
         try:
+            request_data = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False
+            }
+            if format_schema:
+                request_data["format"] = format_schema
+
             response = requests.post(
                 f"{self.base_url}/api/generate",
-                json={"model": self.model, "prompt": prompt, "stream": False},
+                json=request_data,
                 timeout=30,
             )
             response.raise_for_status()
@@ -56,30 +64,33 @@ Analysis:"""
         return self._generate(prompt)
 
     def analyze_security_content(self, content: str) -> tuple[list, str]:
-        # Extract IOCs
-        ioc_prompt = f"""Extract potential Indicators of Compromise (IOCs) from the following security article. 
-Return the result as a JSON array with objects containing 'type' (ip, domain, hash, url) and 'value'.
-If no IOCs are found, return an empty array.
+        # Create prompt for structured IOC extraction
+        ioc_prompt = f"""Extract potential Indicators of Compromise (IOCs) from the following security article and create a Sigma rule.
 
+Article:
 {content}
 
-IOCs:"""
+Instructions:
+1. Identify all potential IOCs (IPs, domains, URLs, file hashes)
+2. For each IOC:
+   - Determine the correct type (ip, domain, hash, url)
+   - Extract the value
+   - Include surrounding context
+   - Assess confidence level (1-100)
+3. Create a Sigma rule if applicable
 
-        iocs_result = self._generate(ioc_prompt)
+Your response should be a structured output with:
+- A list of IOCs including type, value, context, and confidence
+- A Sigma rule (or null if not applicable)"""
+
+        # Use Pydantic model schema for structured output
+        analysis_schema = SecurityAnalysis.model_json_schema()
+        
+        # Get structured response
+        response = self._generate(ioc_prompt, format_schema=analysis_schema)
         try:
-            iocs = json.loads(iocs_result)
-        except json.JSONDecodeError:
-            iocs = []
-
-        # Generate Sigma rule
-        sigma_prompt = f"""Based on the following security article, create a Sigma rule that could detect the described threat.
-Include title, description, status, level, and detection sections in YAML format.
-If no meaningful detection rule can be created, return "No applicable Sigma rule for this content."
-
-{content}
-
-Sigma rule:"""
-
-        sigma_rule = self._generate(sigma_prompt)
-
-        return iocs, sigma_rule
+            analysis = SecurityAnalysis.model_validate_json(response)
+            return analysis.iocs, analysis.sigma_rule or "No applicable Sigma rule for this content."
+        except Exception as e:
+            print(f"Error parsing structured response: {str(e)}")
+            return [], "Error generating Sigma rule"

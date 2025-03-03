@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Dict
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
-from app.models import Feed, FeedEntry, SecurityAnalysis, DetailedAnalysis, IOC
+from app.models import Feed, FeedEntry, SecurityAnalysis, DetailedAnalysis, IOC as DBIOCModel
 from app.llm_service import LLMService
 
 # Configure feedparser debugging
@@ -59,7 +59,7 @@ class FeedService:
         """Get all IOCs with their article context."""
         logger.debug("Fetching all IOCs")
         iocs = []
-        for ioc in self.db.query(IOC).order_by(IOC.discovered_date.desc()).all():
+        for ioc in self.db.query(DBIOCModel).order_by(DBIOCModel.discovered_date.desc()).all():
             entry = self.db.query(FeedEntry).get(ioc.entry_id)
             iocs.append({
                 "type": ioc.type,
@@ -116,11 +116,9 @@ class FeedService:
             logger.debug(f"Performing detailed analysis for entry {entry_id}")
             analysis = self.llm_service.analyze_detailed_content(entry.content)
             
-            # Parse the analysis and store in structured format
             if not entry.detailed_analysis:
                 entry.detailed_analysis = DetailedAnalysis()
             
-            # Store the analysis
             entry.detailed_analysis.key_points = analysis
             entry.detailed_analysis.analysis_date = datetime.utcnow()
             self.db.commit()
@@ -139,26 +137,26 @@ class FeedService:
             if not entry.security_analysis:
                 entry.security_analysis = SecurityAnalysis()
             
-            # Store IOCs in the SecurityAnalysis table
-            entry.security_analysis.iocs = str(iocs)
+            # Store IOCs in the SecurityAnalysis table as string
+            entry.security_analysis.iocs = str([ioc.model_dump() for ioc in iocs])
             entry.security_analysis.sigma_rule = sigma_rule
             entry.security_analysis.analysis_date = datetime.utcnow()
             
             # Store individual IOCs in the IOC table
             for ioc in iocs:
-                ioc_record = IOC(
-                    type=ioc['type'],
-                    value=ioc['value'],
-                    context=ioc.get('context', ''),
+                ioc_record = DBIOCModel(
+                    type=ioc.type,
+                    value=ioc.value,
+                    context=ioc.context or '',
                     entry_id=entry_id,
-                    confidence_score=ioc.get('confidence', 100)
+                    confidence_score=ioc.confidence
                 )
                 self.db.add(ioc_record)
             
             self.db.commit()
             
             return {
-                "iocs": iocs,
+                "iocs": [ioc.model_dump() for ioc in iocs],
                 "sigma_rule": sigma_rule,
                 "iocs_found": len(iocs) > 0,
                 "feed_id": entry.feed_id
@@ -352,22 +350,22 @@ class FeedService:
                             iocs, sigma_rule = self.llm_service.analyze_security_content(new_entry.content)
                             logger.debug("Security analysis completed")
                             
-                            # Store security analysis
+                            # Create security analysis
                             security_analysis = SecurityAnalysis(
                                 entry_id=new_entry.id,
-                                iocs=str(iocs),
+                                iocs=str([ioc.model_dump() for ioc in iocs]),
                                 sigma_rule=sigma_rule
                             )
                             self.db.add(security_analysis)
 
                             # Store individual IOCs
                             for ioc in iocs:
-                                ioc_record = IOC(
-                                    type=ioc['type'],
-                                    value=ioc['value'],
-                                    context=ioc.get('context', ''),
+                                ioc_record = DBIOCModel(
+                                    type=ioc.type,
+                                    value=ioc.value,
+                                    context=ioc.context or '',
                                     entry_id=new_entry.id,
-                                    confidence_score=ioc.get('confidence', 100)
+                                    confidence_score=ioc.confidence
                                 )
                                 self.db.add(ioc_record)
                         except Exception as e:
