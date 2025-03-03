@@ -487,43 +487,51 @@ def render_entries(feed_service: FeedService, db_session: Session):
             
             st.markdown(f"[Read More]({entry.link})")
             
-            # Security Analysis section
-            if entry.security_analysis:
-                st.markdown("#### 🛡️ Security Analysis")
-                try:
-                    iocs = eval(entry.security_analysis.iocs)
-                    if iocs:
-                        st.markdown("**IOCs Found:**")
-                        # Create a nicely formatted table view of IOCs
-                        ioc_data = []
-                        for ioc in iocs:
-                            ioc_data.append({
-                                "Type": ioc['type'],
-                                "Value": ioc['value'],
-                                "Confidence": f"{ioc.get('confidence', 100)}%"
-                            })
-                        df = pd.DataFrame(ioc_data)
-                        st.table(df)
-                        
-                        # Show context for each IOC in expandable sections
-                        st.markdown("**IOC Context:**")
-                        for ioc in iocs:
-                            with st.expander(f"{ioc['type']}: {ioc['value']}", expanded=False):
-                                if ioc.get('context'):
-                                    st.write(ioc['context'])
-                except Exception as e:
-                    st.error(f"Error displaying IOCs: {str(e)}")
+            # Security Analysis section and Button
+            security_col1, security_col2 = st.columns([6, 1])
+            with security_col1:
+                if entry.security_analysis:
+                    st.markdown("#### 🛡️ Security Analysis")
+                    try:
+                        iocs = eval(entry.security_analysis.iocs)
+                        if iocs:
+                            st.markdown("**IOCs Found:**")
+                            # Create a nicely formatted table view of IOCs
+                            ioc_data = []
+                            for ioc in iocs:
+                                ioc_data.append({
+                                    "Type": ioc['type'],
+                                    "Value": ioc['value'],
+                                    "Confidence": f"{ioc.get('confidence', 100)}%"
+                                })
+                            df = pd.DataFrame(ioc_data)
+                            st.table(df)
+                            
+                            # Show context for each IOC in expandable sections
+                            st.markdown("**IOC Context:**")
+                            for ioc in iocs:
+                                with st.expander(f"{ioc['type']}: {ioc['value']}", expanded=False):
+                                    if ioc.get('context'):
+                                        st.write(ioc['context'])
+                    except Exception as e:
+                        st.error(f"Error displaying IOCs: {str(e)}")
 
-                if entry.security_analysis.sigma_rule and entry.security_analysis.sigma_rule != "No applicable Sigma rule for this content.":
-                    st.markdown("**Sigma Rule:**")
-                    st.code(entry.security_analysis.sigma_rule, language="yaml")
+                    if entry.security_analysis.sigma_rule and entry.security_analysis.sigma_rule != "No applicable Sigma rule for this content.":
+                        st.markdown("**Sigma Rule:**")
+                        st.code(entry.security_analysis.sigma_rule, language="yaml")
             
-            # Security Analysis Button
-            if not entry.security_analysis:
-                if st.button("🛡️ Analyze Security", key=f"sec_{entry.id}"):
-                    with st.spinner("Analyzing..."):
-                        feed_service.analyze_security(entry.id)
-                    st.rerun()
+            with security_col2:
+                button_key = f"sec_{entry.id}"
+                if entry.security_analysis:
+                    if st.button("🔄 Refresh", key=f"refresh_{button_key}"):
+                        with st.spinner("Refreshing security analysis..."):
+                            feed_service.analyze_security(entry.id)
+                        st.rerun()
+                else:
+                    if st.button("🛡️ Analyze", key=button_key):
+                        with st.spinner("Analyzing..."):
+                            feed_service.analyze_security(entry.id)
+                        st.rerun()
 
             # Detailed Content Analysis Button
             if st.button("🔍 Analyze Content", key=f"analyze_{entry.id}"):
