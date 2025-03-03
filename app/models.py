@@ -14,6 +14,7 @@ from datetime import datetime
 
 Base = declarative_base()
 
+
 class Feed(Base):
     __tablename__ = "feeds"
 
@@ -26,6 +27,7 @@ class Feed(Base):
     entries = relationship(
         "FeedEntry", back_populates="feed", cascade="all, delete-orphan"
     )
+
 
 class FeedEntry(Base):
     __tablename__ = "feed_entries"
@@ -47,6 +49,7 @@ class FeedEntry(Base):
     )
     feed = relationship("Feed", back_populates="entries")
 
+
 class SecurityAnalysis(Base):
     __tablename__ = "security_analyses"
 
@@ -56,6 +59,7 @@ class SecurityAnalysis(Base):
     sigma_rule = Column(Text)  # Generated Sigma rule
     analysis_date = Column(DateTime, default=datetime.utcnow)
     entry = relationship("FeedEntry", back_populates="security_analysis")
+
 
 class DetailedAnalysis(Base):
     __tablename__ = "detailed_analyses"
@@ -69,6 +73,7 @@ class DetailedAnalysis(Base):
     recommendations = Column(Text)
     analysis_date = Column(DateTime, default=datetime.utcnow)
     entry = relationship("FeedEntry", back_populates="detailed_analysis")
+
 
 class IOC(Base):
     __tablename__ = "iocs"

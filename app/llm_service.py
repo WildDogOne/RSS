@@ -2,6 +2,7 @@ import json
 import requests
 from app.schemas import SecurityAnalysis, IOC
 
+
 class LLMService:
     def __init__(self, base_url="http://ollama:11434", model="mistral"):
         self.base_url = base_url
@@ -19,11 +20,7 @@ class LLMService:
 
     def _generate(self, prompt: str, format_schema: dict = None) -> str:
         try:
-            request_data = {
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False
-            }
+            request_data = {"model": self.model, "prompt": prompt, "stream": False}
             if format_schema:
                 request_data["format"] = format_schema
 
@@ -43,7 +40,7 @@ class LLMService:
         self.model = model
 
     def summarize_article(self, content: str) -> str:
-        prompt = f"""Summarize the following article concisely in 2-3 sentences:
+        prompt = f"""Summarize the following article concisely in 2-3 sentences, only reply with the summary.:
 
 {content}
 
@@ -85,12 +82,15 @@ Your response should be a structured output with:
 
         # Use Pydantic model schema for structured output
         analysis_schema = SecurityAnalysis.model_json_schema()
-        
+
         # Get structured response
         response = self._generate(ioc_prompt, format_schema=analysis_schema)
         try:
             analysis = SecurityAnalysis.model_validate_json(response)
-            return analysis.iocs, analysis.sigma_rule or "No applicable Sigma rule for this content."
+            return (
+                analysis.iocs,
+                analysis.sigma_rule or "No applicable Sigma rule for this content.",
+            )
         except Exception as e:
             print(f"Error parsing structured response: {str(e)}")
             return [], "Error generating Sigma rule"

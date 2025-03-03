@@ -5,7 +5,13 @@ from datetime import datetime
 from typing import List, Dict
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
-from app.models import Feed, FeedEntry, SecurityAnalysis, DetailedAnalysis, IOC as DBIOCModel
+from app.models import (
+    Feed,
+    FeedEntry,
+    SecurityAnalysis,
+    DetailedAnalysis,
+    IOC as DBIOCModel,
+)
 from app.llm_service import LLMService
 
 # Configure feedparser debugging
@@ -13,30 +19,31 @@ feedparser.PREFERRED_XML_PARSERS = ["html.parser"]
 
 logger = logging.getLogger(__name__)
 
+
 class FeedService:
     def __init__(self, db_session: Session, llm_service: LLMService):
         self.db = db_session
         self.llm_service = llm_service
         self.last_update = None
-        
+
         # Enable SQLAlchemy query logging in debug mode
         if logger.getEffectiveLevel() <= logging.DEBUG:
-            event.listen(self.db.bind, 'before_cursor_execute', self._log_sql)
+            event.listen(self.db.bind, "before_cursor_execute", self._log_sql)
 
     def _log_sql(self, conn, cursor, statement, params, context, executemany):
         """Log SQL statements when in debug mode."""
-        logger.debug('Executing SQL: %s', statement)
+        logger.debug("Executing SQL: %s", statement)
 
     def add_test_feed(self) -> Feed:
         """Add a test feed for debugging."""
         test_feed_url = "https://feeds.arstechnica.com/arstechnica/security"
         logger.debug(f"Adding test feed: {test_feed_url}")
-        
+
         return self.add_feed(
             url=test_feed_url,
             title="Ars Technica Security",
             category="Security News",
-            is_security_feed=True
+            is_security_feed=True,
         )
 
     def mark_as_read(self, entry_id: int) -> None:
@@ -59,31 +66,43 @@ class FeedService:
         """Get all IOCs with their article context."""
         logger.debug("Fetching all IOCs")
         iocs = []
-        for ioc in self.db.query(DBIOCModel).order_by(DBIOCModel.discovered_date.desc()).all():
+        for ioc in (
+            self.db.query(DBIOCModel).order_by(DBIOCModel.discovered_date.desc()).all()
+        ):
             entry = self.db.query(FeedEntry).get(ioc.entry_id)
-            iocs.append({
-                "type": ioc.type,
-                "value": ioc.value,
-                "context": ioc.context,
-                "article_title": entry.title if entry else "Unknown",
-                "discovered_date": ioc.discovered_date.isoformat(),
-                "confidence_score": ioc.confidence_score
-            })
+            iocs.append(
+                {
+                    "type": ioc.type,
+                    "value": ioc.value,
+                    "context": ioc.context,
+                    "article_title": entry.title if entry else "Unknown",
+                    "discovered_date": ioc.discovered_date.isoformat(),
+                    "confidence_score": ioc.confidence_score,
+                }
+            )
         logger.debug(f"Found {len(iocs)} IOCs")
         return iocs
 
-    def get_latest_entries(self, feed_id: int = None, category: str = None, only_unread: bool = True, limit: int = 20) -> List[FeedEntry]:
+    def get_latest_entries(
+        self,
+        feed_id: int = None,
+        category: str = None,
+        only_unread: bool = True,
+        limit: int = 20,
+    ) -> List[FeedEntry]:
         """Get latest entries either by feed_id or category."""
-        logger.debug(f"Fetching entries - feed_id: {feed_id}, category: {category}, only_unread: {only_unread}, limit: {limit}")
+        logger.debug(
+            f"Fetching entries - feed_id: {feed_id}, category: {category}, only_unread: {only_unread}, limit: {limit}"
+        )
         query = self.db.query(FeedEntry).join(Feed)
-        
+
         if feed_id is not None:
             logger.debug(f"Filtering by feed_id: {feed_id}")
             query = query.filter(FeedEntry.feed_id == feed_id)
         elif category is not None:
             logger.debug(f"Filtering by category: {category}")
             query = query.filter(Feed.category == category)
-            
+
         if only_unread:
             query = query.filter(FeedEntry.is_read == False)
 
@@ -93,7 +112,11 @@ class FeedService:
 
     def get_categories(self) -> List[str]:
         """Get list of unique categories."""
-        categories = [cat[0] for cat in self.db.query(Feed.category).distinct().all() if cat[0] is not None]
+        categories = [
+            cat[0]
+            for cat in self.db.query(Feed.category).distinct().all()
+            if cat[0] is not None
+        ]
         logger.debug(f"Found categories: {categories}")
         return sorted(categories)
 
@@ -115,14 +138,14 @@ class FeedService:
         if entry:
             logger.debug(f"Performing detailed analysis for entry {entry_id}")
             analysis = self.llm_service.analyze_detailed_content(entry.content)
-            
+
             if not entry.detailed_analysis:
                 entry.detailed_analysis = DetailedAnalysis()
-            
+
             entry.detailed_analysis.key_points = analysis
             entry.detailed_analysis.analysis_date = datetime.utcnow()
             self.db.commit()
-            
+
             return {"analysis": analysis}
         return None
 
@@ -132,38 +155,44 @@ class FeedService:
         if entry:
             logger.debug(f"Performing security analysis for entry {entry_id}")
             iocs, sigma_rule = self.llm_service.analyze_security_content(entry.content)
-            
+
             # Create or update security analysis
             if not entry.security_analysis:
                 entry.security_analysis = SecurityAnalysis()
-            
+
             # Store IOCs in the SecurityAnalysis table as string
             entry.security_analysis.iocs = str([ioc.model_dump() for ioc in iocs])
             entry.security_analysis.sigma_rule = sigma_rule
             entry.security_analysis.analysis_date = datetime.utcnow()
-            
+
             # Store individual IOCs in the IOC table
             for ioc in iocs:
                 ioc_record = DBIOCModel(
                     type=ioc.type,
                     value=ioc.value,
-                    context=ioc.context or '',
+                    context=ioc.context or "",
                     entry_id=entry_id,
-                    confidence_score=ioc.confidence
+                    confidence_score=ioc.confidence,
                 )
                 self.db.add(ioc_record)
-            
+
             self.db.commit()
-            
+
             return {
                 "iocs": [ioc.model_dump() for ioc in iocs],
                 "sigma_rule": sigma_rule,
                 "iocs_found": len(iocs) > 0,
-                "feed_id": entry.feed_id
+                "feed_id": entry.feed_id,
             }
         return None
 
-    def add_feed(self, url: str, is_security_feed: bool = False, title: str = None, category: str = None) -> Feed:
+    def add_feed(
+        self,
+        url: str,
+        is_security_feed: bool = False,
+        title: str = None,
+        category: str = None,
+    ) -> Feed:
         """Add a new feed and process its entries."""
         logger.debug(f"Adding feed - URL: {url}, title: {title}, category: {category}")
         try:
@@ -171,11 +200,13 @@ class FeedService:
             existing_feed = self.db.query(Feed).filter(Feed.url == url).first()
             if existing_feed:
                 logger.debug(f"Feed already exists, updating if needed")
-                if any([
-                    existing_feed.is_security_feed != is_security_feed,
-                    (title and existing_feed.title != title),
-                    (category and existing_feed.category != category)
-                ]):
+                if any(
+                    [
+                        existing_feed.is_security_feed != is_security_feed,
+                        (title and existing_feed.title != title),
+                        (category and existing_feed.category != category),
+                    ]
+                ):
                     existing_feed.is_security_feed = is_security_feed
                     if title:
                         existing_feed.title = title
@@ -189,7 +220,7 @@ class FeedService:
                 url=url,
                 is_security_feed=is_security_feed,
                 title=title,
-                category=category
+                category=category,
             )
             self.db.add(feed)
             self.db.commit()
@@ -212,8 +243,10 @@ class FeedService:
                 try:
                     self._process_feed(feed)
                 except Exception as e:
-                    logger.error(f"Error updating feed {feed.url}: {str(e)}", exc_info=True)
-            
+                    logger.error(
+                        f"Error updating feed {feed.url}: {str(e)}", exc_info=True
+                    )
+
             self.last_update = datetime.now()
             logger.debug("Feed update completed")
         except Exception as e:
@@ -226,8 +259,12 @@ class FeedService:
             self.db.delete(feed)
             self.db.commit()
 
-    def update_feed(self, feed_id: int, category: str = None, title: str = None) -> None:
-        logger.debug(f"Updating feed {feed_id} - new category: {category}, new title: {title}")
+    def update_feed(
+        self, feed_id: int, category: str = None, title: str = None
+    ) -> None:
+        logger.debug(
+            f"Updating feed {feed_id} - new category: {category}, new title: {title}"
+        )
         feed = self.db.query(Feed).get(feed_id)
         if feed:
             if category is not None:
@@ -244,41 +281,43 @@ class FeedService:
             logger.debug(f"Fetching feed from {feed.url}")
             try:
                 parsed = feedparser.parse(feed.url)
-                
+
                 # Log all feed attributes for debugging
                 logger.debug("Feed parsing details:")
                 logger.debug(f"Status: {getattr(parsed, 'status', 'unknown')}")
                 logger.debug(f"Version: {getattr(parsed, 'version', 'unknown')}")
                 logger.debug(f"Encoding: {getattr(parsed, 'encoding', 'unknown')}")
                 logger.debug(f"Bozo: {getattr(parsed, 'bozo', 'unknown')}")
-                
-                if hasattr(parsed, 'bozo_exception'):
+
+                if hasattr(parsed, "bozo_exception"):
                     raise Exception(f"Feed parse error: {parsed.bozo_exception}")
-                
-                if not hasattr(parsed, 'feed') or not hasattr(parsed, 'entries'):
+
+                if not hasattr(parsed, "feed") or not hasattr(parsed, "entries"):
                     raise Exception(f"Invalid feed format: missing feed or entries")
-                
+
                 logger.debug(f"Feed metadata: {parsed.feed}")
-                if hasattr(parsed, 'debug_message'):
+                if hasattr(parsed, "debug_message"):
                     logger.debug(f"Feedparser debug: {parsed.debug_message}")
-                    
+
             except Exception as e:
                 logger.error(f"Error parsing feed {feed.url}: {str(e)}")
                 return
-            
-            if hasattr(parsed, 'status') and parsed.status >= 400:
+
+            if hasattr(parsed, "status") and parsed.status >= 400:
                 logger.error(f"Feed error: HTTP {parsed.status}")
                 return
 
             # Update feed title if not already set
-            if hasattr(parsed, 'feed'):
-                if 'title' in parsed.feed:
+            if hasattr(parsed, "feed"):
+                if "title" in parsed.feed:
                     if not feed.title:
                         feed.title = parsed.feed.title
                         logger.debug(f"Updated feed title to: {feed.title}")
-                logger.debug(f"Feed info - Title: {getattr(parsed.feed, 'title', None)}, Link: {getattr(parsed.feed, 'link', None)}")
+                logger.debug(
+                    f"Feed info - Title: {getattr(parsed.feed, 'title', None)}, Link: {getattr(parsed.feed, 'link', None)}"
+                )
 
-            if not hasattr(parsed, 'entries'):
+            if not hasattr(parsed, "entries"):
                 logger.error("No entries found in feed")
                 return
 
@@ -288,52 +327,65 @@ class FeedService:
             for entry in parsed.entries:
                 try:
                     # Check if entry already exists
-                    entry_link = getattr(entry, 'link', None)
-                    logger.debug(f"Processing entry: {getattr(entry, 'title', 'unknown')} - {entry_link}")
-                    
+                    entry_link = getattr(entry, "link", None)
+                    logger.debug(
+                        f"Processing entry: {getattr(entry, 'title', 'unknown')} - {entry_link}"
+                    )
+
                     if not entry_link:
-                        logger.warning(f"Entry has no link, skipping: {getattr(entry, 'title', 'unknown')}")
+                        logger.warning(
+                            f"Entry has no link, skipping: {getattr(entry, 'title', 'unknown')}"
+                        )
                         continue
 
-                    existing_entry = self.db.query(FeedEntry).filter(
-                        FeedEntry.feed_id == feed.id,
-                        FeedEntry.link == entry_link
-                    ).first()
+                    existing_entry = (
+                        self.db.query(FeedEntry)
+                        .filter(
+                            FeedEntry.feed_id == feed.id, FeedEntry.link == entry_link
+                        )
+                        .first()
+                    )
 
                     if existing_entry:
-                        logger.debug(f"Entry already exists: {getattr(entry, 'title', 'unknown')}")
+                        logger.debug(
+                            f"Entry already exists: {getattr(entry, 'title', 'unknown')}"
+                        )
                         continue
 
                     # Handle published date
                     published_date = None
-                    if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                        published_date = datetime.fromtimestamp(time.mktime(entry.published_parsed))
+                    if hasattr(entry, "published_parsed") and entry.published_parsed:
+                        published_date = datetime.fromtimestamp(
+                            time.mktime(entry.published_parsed)
+                        )
                         logger.debug(f"Using published date: {published_date}")
                     else:
                         published_date = datetime.now()
                         logger.debug("No published_parsed date, using current time")
-                    
+
                     # Handle content
                     content = None
-                    if hasattr(entry, 'content') and entry.content:
-                        content = entry.content[0].get('value', '')
+                    if hasattr(entry, "content") and entry.content:
+                        content = entry.content[0].get("value", "")
                         logger.debug("Found content in entry.content")
-                    elif hasattr(entry, 'description'):
+                    elif hasattr(entry, "description"):
                         content = entry.description
                         logger.debug("Found content in entry.description")
-                    elif hasattr(entry, 'summary'):
+                    elif hasattr(entry, "summary"):
                         content = entry.summary
                         logger.debug("Found content in entry.summary")
                     else:
                         content = str(entry)
-                        logger.debug("No content found, using entry string representation")
-                    
+                        logger.debug(
+                            "No content found, using entry string representation"
+                        )
+
                     new_entry = FeedEntry(
                         feed=feed,
-                        title=getattr(entry, 'title', ''),
+                        title=getattr(entry, "title", ""),
                         link=entry_link,
                         published_date=published_date,
-                        content=content
+                        content=content,
                     )
 
                     # Add and flush to get ID
@@ -347,14 +399,18 @@ class FeedService:
                     # Only perform security analysis immediately for security feeds
                     if feed.is_security_feed:
                         try:
-                            iocs, sigma_rule = self.llm_service.analyze_security_content(new_entry.content)
+                            iocs, sigma_rule = (
+                                self.llm_service.analyze_security_content(
+                                    new_entry.content
+                                )
+                            )
                             logger.debug("Security analysis completed")
-                            
+
                             # Create security analysis
                             security_analysis = SecurityAnalysis(
                                 entry_id=new_entry.id,
                                 iocs=str([ioc.model_dump() for ioc in iocs]),
-                                sigma_rule=sigma_rule
+                                sigma_rule=sigma_rule,
                             )
                             self.db.add(security_analysis)
 
@@ -363,9 +419,9 @@ class FeedService:
                                 ioc_record = DBIOCModel(
                                     type=ioc.type,
                                     value=ioc.value,
-                                    context=ioc.context or '',
+                                    context=ioc.context or "",
                                     entry_id=new_entry.id,
-                                    confidence_score=ioc.confidence
+                                    confidence_score=ioc.confidence,
                                 )
                                 self.db.add(ioc_record)
                         except Exception as e:
