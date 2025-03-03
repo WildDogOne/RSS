@@ -1,4 +1,5 @@
 import json
+import re
 import requests
 from app.schemas import SecurityAnalysis, IOC
 
@@ -18,6 +19,10 @@ class LLMService:
             print(f"Error getting models: {str(e)}")
             return ["mistral"]  # Return default model as fallback
 
+    def _filter_thinking_tags(self, text: str) -> str:
+        """Remove content between <think> and </think> tags."""
+        return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+
     def _generate(self, prompt: str, format_schema: dict = None) -> str:
         try:
             request_data = {"model": self.model, "prompt": prompt, "stream": False}
@@ -30,7 +35,13 @@ class LLMService:
                 timeout=30,
             )
             response.raise_for_status()
-            return response.json()["response"]
+            response_text = response.json()["response"]
+            
+            # Filter thinking tags if using a thinking model
+            if any(model in self.model.lower() for model in ["deepseek", "yi"]):
+                response_text = self._filter_thinking_tags(response_text)
+                
+            return response_text
         except (requests.RequestException, KeyError) as e:
             return f"Error generating response: {str(e)}"
 
